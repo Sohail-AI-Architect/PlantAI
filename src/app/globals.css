@@ -1,26 +1,57 @@
 @import "tailwindcss";
 
+/*
+ * PlantAI design tokens — Phase 1 foundation slice.
+ * Brand colors approximate the approved palette in UI_UX_DESIGN.md §2.1
+ * (emerald/teal primary on an off-white background). Exact hex refinement
+ * is a Phase 3 design-polish task; structure here is final.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf7;
+  --foreground: #1c2a22;
+
+  /* Semantic */
+  --success: #15803d;
+  --warning: #b45309;
+  --error: #b91c1c;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Brand: emerald/teal family (UI_UX_DESIGN.md §2.1) */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f4f1;
+  --color-border-muted: #e2e8e4;
+  --color-foreground-muted: #5d6b63;
+
+  --font-sans: var(--font-inter);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Visible focus for keyboard users (UI_UX_DESIGN.md §8 accessibility) */
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
 }

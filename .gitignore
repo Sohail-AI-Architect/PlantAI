@@ -21,6 +21,8 @@
 /build
 
 # misc
+backups
+scaffold-tmp
 .DS_Store
 *.pem
 
