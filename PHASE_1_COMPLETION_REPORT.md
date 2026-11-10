@@ -114,7 +114,7 @@ git add -A   (commit follows this report)
 4. **Vercel deploy (P1-13):** Hobby plan import from GitHub + env vars per
    DEPLOYMENT_GUIDE.md §4/§6 (`NEXT_PUBLIC_*` only until Phase 2 needs
    `PLANTNET_MODE`, and Phase 2 only uses mock upstream calls).
-5. (Phase 2 preqreq) Pl@ntNet account + API key generation — safe to do now; recorded server-side only.
+5. (Phase 2 prerequisite) Pl@ntNet account + API key generation — safe to do now; recorded server-side only.
 6. Jurisdiction answer remains open for the ToS governing-law placeholder (no rush; blocks legal-page content in Phase 3, not code).
 
 ## 8. Task board status after Phase 1
