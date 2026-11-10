@@ -5,6 +5,13 @@ Format based on Keep a Changelog; newest entries first.
 
 ---
 
+## [0.2.1] — Local Supabase env file configured (placeholder state) — 2026-11-10
+
+### Added
+- Phase 1.1 local environment configuration task: `.env.local` confirmed present (created from `.env.example` template where absent; neither overwritten nor modified with real values). Mask-only verification script run — variables `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are **still placeholders at scan time**; owner to paste real values locally. Git safety verified: file git-ignored, absent from `git ls-files`, no commit ever touched it, no key strings in tracked files, no secret references in client code (env.ts doc-comments only). Database connectivity NOT tested (no value pasted, no query run). Full verification method + status note recorded in ENVIRONMENT_SETUP.md §5.3.
+
+---
+
 ## [0.2.0] — Phase 1: Environment & Project Scaffold — 2026-11-10
 
 ### Application scaffold (first code in the repository)

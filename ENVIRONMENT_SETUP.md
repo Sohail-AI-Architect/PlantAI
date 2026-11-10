@@ -216,6 +216,17 @@ PLANTNET_API_KEY=<your-private-key>
 3. Save and never commit: `git status` must NOT list `.env.local`.
 4. Tell the agent/assistant privately only *whether* values are set — never paste them.
 
+**Local config status (2026-11-10, Phase 1.1):** `.env.local` exists locally
+(created from the `.env.example` template; git-ignored; never committed, no
+commits touch it). At scan time the two primary values were still the
+template placeholders — the owner pastes the real Project URL and Publishable
+key directly into the file (view with `code .env.local` in VS Code or any
+editor; do NOT paste keys into chat or terminal). Verification method on
+record: a mask-only script checks presence/placeholder-state/`sb_publishable_`
+prefix and prints at most the first and last 4 characters of a value — full
+contents are never displayed or logged. Database connectivity is **not**
+verified until a real query runs (Phase 2).
+
 ### 5.4 `.env.example` (committed — placeholders ONLY)
 
 A committed `.env.example` with placeholder values lives inside the repo; no real keys ever. Created at Phase 1 scaffold (see [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) production env vars). Same variable names, placeholder values like `your_key_here`, comments pointing at §3 and §4 of this file for where to obtain each key, and a warning banner.
