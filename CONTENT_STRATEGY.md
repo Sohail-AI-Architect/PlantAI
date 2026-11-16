@@ -88,15 +88,15 @@ Exact fields match the `plant_library` table (see `DATABASE_SCHEMA.md`); publish
 | `common_names` | text[] | all real-world common names, primary first |
 | `family` | text | — |
 | `genus` | text | — |
-| `category` | enum/text (e.g. houseplant, herbaceous, tree, succulent) | consistent vocabulary |
+| `category` | `plant_category` enum (canonical values from migration 000: `tree`, `shrub`, `herbaceous`, `succulent_cactus`, `fern`, `vine_climber`, `aquatic`, `ornamental_grass`, `houseplant`, `fruit_vegetable`, `other`) | consistent vocabulary — write seeds with these exact enum values |
 | `description` | text (2–4 sentences) | written prose, no keyword stuffing |
 | `care_watering` | text (1–3 sentences / mini-table) | frequency *and* cue ("top inch dry") |
 | `care_sunlight` | text | direction/likeliness in plain terms |
 | `care_soil` | text | mix + pot guidance where useful |
 | `care_fertilizer` | text | frequency + product class |
-| `difficulty` | enum: `easy` / `moderate` / `challenging` | our own scale, documented once |
+| `difficulty` | enum: `easy` / `moderate` / `hard` (canonical values from migration 000 line 52 — reconciled 2026-11-15; the earlier "challenging" wording was not a real DB value) | our own scale, documented once |
 | `image_url` | url | hero image, original or licensed+attributed (checklist §3) |
-| `published` | boolean | only `true` entries appear on `/plant/[slug]` and the sitemap |
+| `is_published` | boolean (canonical column name verified against migration 000 and `/plant/[slug]`) | only `true` entries appear on `/plant/[slug]` and the sitemap |
 
 Optional future fields (tracked as schema changes in `TASKS.md` after Phase 4, not now): temperature, humidity, common problems, toxic-to, sources. MVP launches lean; extend data only when it improves real UX.
 

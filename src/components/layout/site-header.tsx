@@ -1,13 +1,13 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { AuthNav } from "@/components/auth/auth-nav";
 
 /*
- * Global header — Phase 1 skeleton slice (UI_UX_DESIGN.md §5 navigation).
- * Desktop links only for now; the mobile bottom-navigation pattern
- * (5-item bar with raised Identify button) is a Phase 2 task because it
- * belongs with the live identification flow.
- *
- * Marketing claim discipline: no identification is offered yet — the
- * Identify link points to a clearly-labelled Phase 2 stub.
+ * Global header — Phase 2 update (UI_UX_DESIGN.md §5 navigation).
+ * The auth slot streams inside Suspense (verified claims + cookies are
+ * runtime data under Cache Components — Next.js 16). Marketing claim
+ * discipline unchanged: copy describes the demo/mock status of the
+ * identify flow honestly.
  */
 
 const NAV_LINKS = [
@@ -34,28 +34,32 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        <nav aria-label="Main navigation">
-          <ul className="flex items-center gap-1 sm:gap-3">
-            {NAV_LINKS.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="hover:bg-brand-50 hover:text-brand-800 rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-            <li className="hidden sm:block">
-              <Link
-                href="/login"
-                className="bg-brand-600 hover:bg-brand-700 rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors"
-              >
-                Sign in
-              </Link>
-            </li>
-          </ul>
-        </nav>
+        <div className="flex items-center gap-2">
+          {/* Main links are desktop-only: on mobile the bottom nav covers
+              them (single navigation, no duplication). */}
+          <nav
+            aria-label="Main navigation"
+            className="hidden md:block"
+          >
+            <ul className="flex items-center gap-1 sm:gap-3">
+              {NAV_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="hover:bg-brand-50 hover:text-brand-800 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <Suspense
+            fallback={<div className="w-40" aria-hidden="true" />}
+          >
+            <AuthNav />
+          </Suspense>
+        </div>
       </div>
     </header>
   );

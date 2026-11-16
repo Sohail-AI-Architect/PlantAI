@@ -29,7 +29,7 @@
 
 - **Test the critical path hard.** The one feature that makes or breaks PlantAI is: *user → image → Pl@ntNet → result → save*. Everything around it (auth halves, content pages) gets thinner coverage.
 - **Pragmatic over exhaustive.** Target: meaningful coverage of pure functions, a handful of E2E flows, and a strict API contract suite. We explicitly do NOT chase a coverage number.
-- **Deterministic first.** Anything calling a third party is mocked with recorded fixtures; anything calling a network in CI fails review.
+- **Deterministic first.** Anything calling a third party is mocked with offline fixtures (synthetic, documentation-derived, provenance-labeled — §12.1); anything calling a network in CI fails review.
 - **Fast feedback.** Unit tests run in seconds; E2E runs only on-demand/CI, not per-save.
 - **Zero budget.** Every tool below is free/open-source. No paid test platforms, no BrowserStack, no paid fakedata.
 
@@ -56,8 +56,8 @@ All unit tests target **pure functions** (deterministic, no I/O). Target suite r
 | # | Unit under test | Example cases |
 |---|---|---|
 | 1 | **Image validation** (`validateImageFile`) | jpg with correct magic bytes → ok; png with wrong magic → rejected; file renamed `.jpg` but bytes are PDF → rejected; 9.99 MB → ok; 10.01 MB → rejected; 0 images → rejected; 4 images → rejected; non-image MIME type → rejected; SVG masquerading as jpg → rejected |
-| 2 | **Hash computation** (`computeImageHash` for identification_cache dedupe) | Same bytes → same hash; different image → different hash; empty buffer → error; >10 MB buffer → still stable; known-vector fixture pin (snapshot) |
-| 3 | **PlantNet response normalizer** (`normalizePlantNetResponse`) with fixture JSON | Happy path fixture → normalized candidates with confidence 0–1; missing `score` → default/undefined handled; empty results → empty array; malformed node_id → skipped; negative score → clamped/flagged; extra unknown fields → ignored not crashed |
+| 2 | **Hash computation** (`combinedImageHash` in `src/lib/identify/hash.ts`, for identification_cache dedupe) | Same bytes → same hash; different image → different hash; empty buffer → error; >10 MB buffer → still stable; known-vector fixture pin (snapshot) |
+| 3 | **PlantNet response normalizer** (`normalizeUpstreamResponse` in `src/lib/plantnet/normalize.ts`) with fixture JSON | Happy path fixture → normalized candidates with confidence 0–1; missing `score` → default/undefined handled; empty results → empty array; malformed id field (`gbif.id`/`powo.id` in v2 — legacy `node_id` naming here predates the Stage A1 verification) → skipped; negative score → clamped/flagged; extra unknown fields → ignored not crashed |
 | 4 | **Care summary resolution** (phase 4) | plant with full care data → summary object; plant missing watering → falls back to library defaults; empty care data → safe "unknown" summary; multiple conflicting entries → deterministic tiebreak |
 | 5 | **Rate-limit counter logic** (`RateLimiter` class) | Anonymous under 5/day → allowed; 5th anon request → denied; 6th authenticated request same day → allowed; 20th authenticated → allowed; 21st → denied; day rollover (fake clock) → counters reset; concurrent increments from two "instances" → both counted (best-effort semantics test); per-user and per-IP counters independent |
 | 6 | **Reminder date math** (phase 4) | Watering every 7 days from today → correct next date; overdue reminder → negative days flag marked; leap year/Feb; DST-boundary non-crash; recomputation after "mark watered today" resets the cycle |
@@ -97,7 +97,7 @@ Route Handler contract tests via Vitest + Next.js request/response mocks (or `ne
 
 | # | Case | Input | Expected outcome |
 |---|---|---|---|
-| 1 | **Happy path** | 1 valid jpg (fixture) with mocked Pl@ntNet 200 via recorded fixture | 200; normalized candidates in body; `identifications` row recorded (mocked); remaining-quota logged |
+| 1 | **Happy path** | 1 valid jpg (fixture) with mocked Pl@ntNet 200 via synthetic fixture | 200; normalized candidates in body; `identifications` row recorded (mocked); remaining-quota logged |
 | 1b | Happy path 3 images (max) | 3 valid jpgs | 200; all forwarded; upstream receives 3 |
 | 2 | **Oversized image** | jpg fixture 10.01 MB | 413/400; no Pl@ntNet call; no credit consumed |
 | 3 | **Wrong MIME** | `.png`-named actually-PDF | 415; magic-number check fails; no upstream call |
@@ -109,7 +109,28 @@ Route Handler contract tests via Vitest + Next.js request/response mocks (or `ne
 | 9 | **Privacy assertion** | capture upstream request body | contains images + project slug ONLY — no email/IP/user_id/GPS fields (test asserts absence) |
 | 10 | **No secret leak** | inspect response + route module | never contains PLANTNET_API_KEY value |
 
-**Fixture policy:** Pl@ntNet responses used in CI MUST be recorded fixtures. We **never call the real Pl@ntNet API in CI** — the free 500/day quota is a shared shared shared resource and CI would be unreliable too. Exactly **one manual smoke test per week against the live Pl@ntNet API** is allowed, documented in the weekly test log (date, key rotated?, result). All other Pl@ntNet tests use `tests/fixtures/plantnet/*.{json}` recorded responses.
+**Fixture policy:** Pl@ntNet responses used in CI are **synthetic,
+documentation-derived fixtures** (Stage D, 2026-11-13). We **never call the real
+Pl@ntNet API in CI** — the free 500/day quota is a shared resource and CI would
+be unreliable too. Exactly **one manual smoke test per week against the live
+Pl@ntNet API** is allowed, documented in the weekly test log (date, key
+rotated?, result).
+
+Provenance rules (Stage D):
+- Every fixture explicitly declares its provenance
+  (`tests/fixtures/plantnet/upstream-fixtures.ts` exports
+  `FIXTURE_PROVENANCE`): field **shapes** mirror the verified Stage A1
+  upstream contract, but **values** (species names, scores, authors, URLs,
+  quota numbers) are invented offline placeholders.
+- Synthetic fixtures are **NOT real recorded Pl@ntNet responses** and must
+  never be presented or referenced as such. Image URLs use the RFC 2606
+  `.invalid` TLD (never resolvable); only documented *header formats* and
+  attribution wording are quoted verbatim.
+- Real recorded responses require the separately authorized **Stage G live
+  smoke**; when they land they must be stored under
+  `tests/fixtures/plantnet/*.{json}` with their capture provenance recorded.
+- Synthetic and actual recorded fixtures must never be misrepresented as one
+  another — every fixture carries or is referenced with its correct kind.
 
 ---
 
@@ -269,7 +290,21 @@ At least: **10 common plant photos** (clear species, varied angles — dandelion
 | 10 plant photos | happy-path contract + E2E; they do not need genuine Pl@ntNet accuracy since responses are mocked |
 | unreadable file | validation rejection path |
 | >10 MB file | size rejection path |
-| not-a-plant photo | normalizer robustness (API may return empty candidates) |
+| not-a-plant photo | normalizer robustness (upstream returns **HTTP 404 "Species not found"** for non-plant images — verified 2026-11-12; the normalizer/error path must map this to `no_match_found`, while other unexpected upstream 4xx values remain a distinct error path) |
+
+**Fixture shape policy (Stage A1/A2 alignment, 2026-11-12; provenance clarified Stage D):** fixtures
+— synthetic, documentation-derived, provenance-labeled (see §5 fixture policy) — must mirror the
+**verified upstream contract** in [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) /
+[`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) §2.8 — host `https://my-api.plantnet.org`, endpoint
+`POST /v2/identify/{project}`, default project **`all`**, repeated `organs` form values (one per
+image, in image order; values `leaf`/`flower`/`fruit`/`bark`/`auto`), response body with
+`results[]` (`score` 0–1, `species.*`, `commonNames`, optional `gbif.id`/`powo.id`),
+`predictedOrgans`, `bestMatch`, `remainingIdentificationRequests`, headers
+`RateLimit-Policy`/`RateLimit`/`Retry-After`, per-image `images[]` with **actual**
+`author`/`license`/`citation` fields (license may vary/be missing — fixtures must include a
+missing-license case since unknown licenses prevent display). Fixtures written before Stage A1
+carrying `allplants`/`lateral`/`root`/singular `organ` assumptions are obsolete and must not be
+used as reference shapes.
 
 ### 12.2 CI setup
 

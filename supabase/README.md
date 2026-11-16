@@ -36,10 +36,58 @@ Verify: Dashboard → Database → Migrations (5 applied entries), Table editor 
 
 Dashboard → SQL editor → run each file's contents in order 1→5 (paste whole file per run). Verify with the same checks as above. (No migration tracking — keep a manual log in CHANGELOG.md if this path is used.)
 
+## Data API access model (grant-based — verified 2026-11-11)
+
+With *automatically expose new tables* **disabled** (verified setting in the
+dashboard), reachability through the Data API is governed by **explicit
+Postgres grants** to the `anon` / `authenticated` / `service_role` roles, not by
+manually exposing tables one by one. Two layers must hold:
+
+1. **Grants** — which Data API role may reach a table. Missing grants produce
+   PostgreSQL `42501` errors (see `DATA_API_ACCESS_PLAN.md` /
+   `DATA_API_PRIVILEGE_EXECUTION_REPORT.md`).
+2. **RLS** — which rows each role can see. Enabled + forced on all 10 tables
+   (migration `002_rls_policies.sql`).
+
+Verified end state on `plantai-dev`: `plant_library` anon REST GET →
+**HTTP 200, 10 rows**; `identification_cache` anon REST GET → **HTTP 401 /
+PostgreSQL 42501** (server-only table, service_role grants only). A dashboard
+counter showing "0 of 10" tables reflects only the automatic-expose toggle —
+it does **not** mean queries will 404 while the grants exist.
+
+**Do not change these Supabase settings;** re-applying migrations on a fresh
+project reproduces the schema, but the grant script referenced in
+`DATA_API_PRIVILEGE_EXECUTION_REPORT.md` is a separate, owner-run step.
+
+## Key terminology (Phase 2.5, 2026-11-12)
+
+| Variable | Key in dashboard | Scope |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Publishable key** | Browser-safe (client). Safe only because RLS is on everywhere (`SECURITY.md`) |
+| `SUPABASE_SECRET_KEY` | **Secret key** (`sb_secret_...`) | **Server-only.** Bypasses RLS (resolves to the `service_role` role). Canonical modern name per current Supabase docs; the legacy `SUPABASE_SERVICE_ROLE_KEY` JWT is deprecated by end of 2026 and is still accepted as a fallback by `getServerSupabaseSecretKey()` in `src/lib/env.ts` |
+
+Never `NEXT_PUBLIC_`-prefix a secret; anything with that prefix is written into
+the client bundle. See `ENVIRONMENT_SETUP.md` §5.1 and `SECURITY.md` §2.
+
+## Persistence prerequisites (currently OFF)
+
+Writes to `identifications` / durable `identification_cache` are **inactive**
+until ALL of the following hold (write-guard in
+`src/lib/plantnet/persistence.ts`):
+
+- `PLANTAI_PERSISTENCE_ENABLED` is set to the exact string `"true"`
+  (any other value ⇒ persistence stays off);
+- `SUPABASE_SECRET_KEY` (or legacy fallback) is configured **and accepted by
+  Supabase** — the previously stored legacy JWT was rejected ("Invalid API key");
+- migrations 1–5 above are applied (these tables do not exist otherwise).
+
+Until then, responses are unaffected and zero rows are written. Do not activate
+these variables without explicit owner approval.
+
 ## Owner verification checklist (cannot be done from here)
 
 - [ ] Migrations applied to `plantai-dev` (or `plantai-prod` as target)
-- [ ] Database settings: "Expose via Data API" — with *automatically expose new tables disabled*, **manually expose** the 10 `public` tables to the `public` REST API, or supabase-js queries will 404 (owner decision item)
+- [ ] Data API reachability verified per the grant-based model above (`plant_library` anon REST → 200; `identification_cache` anon REST → 401)
 - [ ] Authentication: email/password + magic link visible in Auth providers (email confirm on)
 - [ ] Storage: both buckets exist with correct public/private flags
 - [ ] Admin account: create the real owner account, then run the promotion UPDATE from `004_seed.sql` comments

@@ -157,6 +157,7 @@ Zero-budget note: per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), Supaba
    - **Errors also consume 1 credit** (since 2026-02-13) — this is why PlantAI's pre-validation is strict ([`SECURITY.md`](SECURITY.md) §5–6).
    - The key is **private**: no browser-side usage, no CORS whitelisting in PlantAI — all calls are server-side ([`SECURITY.md`](SECURITY.md) §3).
 5. Keep the key out of any client code, client docs, or screenshots you share.
+6. **API host (verified 2026-11-12):** identification requests target **`https://my-api.plantnet.org`** — the `my.plantnet.org` site referenced above is the account/portal/docs site, NOT the API host. Authentication is the **`api-key` query parameter**, so the key is embedded in request URLs: **full request URLs must never be logged** (`SECURITY.md` §3). No live-mode instructions are provided here — live identification stays gated on owner approval.
 
 ---
 
@@ -175,9 +176,11 @@ Zero-budget note: per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), Supaba
 | `NEXT_PUBLIC_SITE_URL` | You choose later (`http://localhost:3000` for dev) | Yes (public by design) | Used by auth email links and metadata |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API | Yes (public by design) | Points at `plantai-dev` (region `ap-south-1`) for local dev |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → **Publishable key** | Yes (public by design) | **ADR-9 (2026-11-10):** new Supabase naming; replaces the older `NEXT_PUBLIC_SUPABASE_ANON_KEY` in this doc — same credential. Safe only because RLS is on for all tables ([`SECURITY.md`](SECURITY.md) §8) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API — SECRET (server-only) | **No — server-only** | Bypasses RLS; never `NEXT_PUBLIC_`; needed from Phase 2 onward ([`SECURITY.md`](SECURITY.md) §2) |
+| `SUPABASE_SECRET_KEY` | Supabase → **Project Settings → API Keys** — SECRET (server-only), format `sb_secret_...` | **No — server-only** | Bypasses RLS (resolves to the `service_role` Postgres role); never `NEXT_PUBLIC_`; needed for identifications persistence + `identification_cache`. **Canonical name per current Supabase docs (Phase 2.5, 2026-11-12)** — legacy `anon`/`service_role` JWT keys are deprecated by end of 2026 |
+| `SUPABASE_SERVICE_ROLE_KEY` (legacy) | Supabase → Project Settings → API Keys — SECRET (server-only), legacy JWT | **No — server-only** | **Deprecated by Supabase by end of 2026.** Still accepted by this codebase as a fallback when `SUPABASE_SECRET_KEY` is unset. **Phase 2 finding:** the value in `.env.local` was rejected by Supabase ("Invalid API key") — replace it with a valid `SUPABASE_SECRET_KEY` (see `PHASE_2_SUPABASE_SECRET_KEY_REPORT.md`) |
 | `PLANTNET_API_KEY` | my.plantnet.org → settings → API key — SECRET | **No — server-only** | Never leave server context; needed from Phase 2 |
-| `PLANTNET_MODE` | Developer switch (`real` / `mock`) | **No — server-only** | `mock` for all local dev/preview (protect the shared 500/day quota) |
+| `PLANTNET_MODE` | Developer switch (`real` / `mock`) | **No — server-only** | `mock` for all local dev/preview (protect the shared 500/day quota). **Phase 2 implemented:** `mock` is the enforced default — `live` without a valid `PLANTNET_API_KEY` fails safe back to mock; live identification additionally requires explicit owner approval |
+| `IP_HASH_SALT` | Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | **No — server-only** | **Phase 2 (new):** salt for the salted-SHA-256 IP hash used by the anonymous identify counter — raw IPs are never logged (SECURITY.md §7/§9). Unset ⇒ per-process ephemeral salt (counters stay correct within an instance; differ across instances/restarts). Add to `.env.example` (done) and set on the host for stable per-IP counters |
 | `SUPABASE_DB_URL` (optional) | Supabase → Project Settings → Database | **No — server-only (tooling)** | Only if Migrations/psql tooling is used |
 
 ### 5.2 `NEXT_PUBLIC_` prefix exposure rule
@@ -196,8 +199,11 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_SUPABASE_URL=https://<your-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 
-# --- Supabase (SECRET, server-only) ---
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+# --- Supabase privileged key (SECRET, server-only) ---
+# Recommended: sb_secret_... from Dashboard → Project Settings → API Keys
+SUPABASE_SECRET_KEY=<sb_secret_...>
+# Legacy fallback (deprecated by Supabase by end of 2026; still accepted):
+# SUPABASE_SERVICE_ROLE_KEY=<legacy-service-role-jwt>
 
 # --- Pl@ntNet (SECRET, server-only) ---
 PLANTNET_API_KEY=<your-private-key>
@@ -212,7 +218,7 @@ PLANTNET_API_KEY=<your-private-key>
 2. Open only `.env.local` (VS Code). Paste your real values **only** into these lines — no values belong in chat, screenshots, or committed files:
    - `NEXT_PUBLIC_SUPABASE_URL` = your plantai-dev Project URL
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = your plantai-dev Publishable key
-   - (leave `SUPABASE_SERVICE_ROLE_KEY` for Phase 2; same file, same rules)
+   - `SUPABASE_SECRET_KEY` = your plantai-dev `sb_secret_...` key (Phase 2.5 — see `PHASE_2_SUPABASE_SECRET_KEY_REPORT.md` §4; never paste it in chat)
 3. Save and never commit: `git status` must NOT list `.env.local`.
 4. Tell the agent/assistant privately only *whether* values are set — never paste them.
 

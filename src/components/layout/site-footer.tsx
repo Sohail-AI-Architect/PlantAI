@@ -17,6 +17,9 @@ import Link from "next/link";
  */
 
 const LEGAL_LINKS = [
+  { href: "/identify", label: "Identify a plant" },
+  { href: "/library", label: "Plant library" },
+  { href: "/blog", label: "Blog" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
   { href: "/privacy", label: "Privacy Policy" },

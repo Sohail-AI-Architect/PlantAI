@@ -1,6 +1,6 @@
 # PlantAI — API Documentation
 
-> Status: Phase 0 (Planning) · Last updated: 2026-11-10
+> Status: Phase 2 implemented (mock-first) · Last updated: 2026-11-12
 > Owner: Technical Architect
 > Third-party facts (Pl@ntNet free plan = 500 identifications/day, 20 concurrent max, errors consume 1 credit, ≤50 MB POST, 429 at quota exhaustion until midnight UTC) are sourced from [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) unless marked **UNVERIFIED**.
 > Related: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md), [`AI_INTEGRATION_PLAN.md`](AI_INTEGRATION_PLAN.md), [`UI_UX_DESIGN.md`](UI_UX_DESIGN.md), [`SECURITY.md`](SECURITY.md), [`REQUIREMENTS.md`](REQUIREMENTS.md), [`TESTING_PLAN.md`](TESTING_PLAN.md), [`ENVIRONMENT_SETUP.md`](ENVIRONMENT_SETUP.md), [`CHANGELOG.md`](CHANGELOG.md).
@@ -63,7 +63,7 @@ Cross-reference: the runtime pipeline diagram is in [`ARCHITECTURE.md`](ARCHITEC
 | CORS | Same-origin only — no whitelisting; the browser must call this via the same origin (this is the *reason* the key stays server-side, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Pl@ntNet account rules) |
 | Runtime | Vercel serverless function (Node runtime; memory sized for 3×10 MB buffers) |
 | Idempotency | Uploads are hash-deduped (§2.4) — repeated calls with identical images return cached results and skip the upstream credit |
-| Upstream | Pl@ntNet API v2 — 500 identifications/day free ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)); API key supplied **only** server-side via `PLANTNET_API_KEY` (`ENVIRONMENT_SETUP.md`) |
+| Upstream | Pl@ntNet API v2 at **`https://my-api.plantnet.org`** (`/v2/identify/{project}`; default project **`all`**) — 500 identifications/day free ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), verified 2026-11-12); API key supplied **only** server-side via `PLANTNET_API_KEY` as the **`api-key` query parameter** (`ENVIRONMENT_SETUP.md`). **The full request URL contains the key and must NEVER be logged** — errors and diagnostics must be redacted before any log output |
 
 ### 2.2 Auth expectations
 
@@ -81,15 +81,15 @@ Cross-reference: the runtime pipeline diagram is in [`ARCHITECTURE.md`](ARCHITEC
 
 | Part | Type | Required | Constraint | Description |
 |---|---|---|---|---|
-| `images[]` | `File` (binary) | **Yes (1–3 files)** | `image/jpeg` or `image/png` only (magic-byte sniffed, not just extension); ≤ **10 MB each** (client pre-resized) | 1–5 allowed upstream but PlantAI allows only 1–3 (upstream cap is 5, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md); 3 keeps POST small + protects quota; recommended shot set: whole plant, leaf top-side, flower/fruit if present). **All images must be the same individual plant** (upstream rule) |
+| `images[]` | `File` (binary) | **Yes (1–3 files)** | `image/jpeg` or `image/png` only (magic-byte sniffed, not just extension); ≤ **10 MB each** (client pre-resizing: **planned, not yet implemented** — see note below) | 1–5 allowed upstream but PlantAI allows only 1–3 (upstream cap is 5, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md); 3 keeps POST small + protects quota; recommended shot set: whole plant, leaf top-side, flower/fruit if present). **All images must be the same individual plant** (upstream rule) |
 | `latitude` | `number` | No | `-90..90`, decimal degrees | Regional flora hint — semantically part of “region” |
 | `longitude` | `number` | No | `-180..180` | Ditto |
-| `organ` | `string` | No | one of `flower`, `leaf`, `lateral`, `root`, `auto` (default `auto`) | Pl@ntNet organ hint (`AI_INTEGRATION_PLAN.md`) |
+| `organ` | `string` | No | one of `leaf`, `flower`, `fruit`, `bark`, `auto` (default `auto`) | PlantAI's organ hint. **Upstream contract (verified 2026-11-12):** the upstream parameter is **`organs` (plural)** — one repeated form value **per image, matched in image order**; omitting it enables automatic detection. `lateral`/`root` are **not valid upstream values** (previously listed here in error). The route's request builder maps the single caller field to the repeated upstream `organs` values (Stage B implementation; **code mismatch flagged in TASKS.md future work — current zod/UI enum still contains `lateral`/`root` and lacks `fruit`/`bark`**) |
 | `sendMarkdown` / non-standard fields | — | — | — | **Rejected** — unknown form fields are ignored silently to keep upload forward-compatible in MVP |
 
 Notes:
 
-- **MVP decision: no server-side resize.** Pl@ntNet auto-resizes input to 1280 px on the smaller side ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)), so PlantAI passes ≤10 MB originals straight through. The **client** `UploadWidget` downsamples/encodes (canvas) so users on mobile networks avoid 50 MB uploads. If Supabase upload sizes ever need server resize (future feature: server-side storage tiering), it'd be a separate decision recorded in `CHANGELOG.md`.
+- **MVP decision: no server-side resize.** Pl@ntNet auto-resizes input to 1280 px on the smaller side ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)), so PlantAI passes ≤10 MB originals straight through. Client `UploadWidget` downsampling/encoding (canvas) is **planned but not yet implemented** (deferred per `TASKS.md` P2-01, 2026-11-12 — no client resize/compress or EXIF-strip code exists today; the server's magic-byte + size validation is authoritative). If Supabase upload sizes ever need server resize (future feature: server-side storage tiering), it'd be a separate decision recorded in `CHANGELOG.md`.
 - `latitude`/`longitude` precision: keep `!==`-exact — clients send 5–6 decimal places max; nothing leaks more precision.
 - `images[]` name must match exactly; multiple files under the same form key.
 
@@ -104,7 +104,9 @@ Notes:
  [5] perceptual hash of each image (JS library, no native deps)
  [6] hash lookup in identification_cache ── hit ► normalize cached / update hit_count ► 200 (cached:true)
  [7] persist identifications row (status=processing, image_paths)
- [8] upstream POST /v2/identify/{project}
+ [8] upstream POST https://my-api.plantnet.org/v2/identify/{project}
+      │        (project `all`; api-key query param; repeated `organs` per
+      │         image in order — the URL contains the key and is NEVER logged)
      ├─ 2xx → [9]
      ├─ 429 (upstream quota exhausted until midnight UTC) → status=failed ► 503 response
      │       + remainingQuota:0 + "quota reached" UI state
@@ -137,6 +139,8 @@ Every response (success, error, and 429) includes:
 | `X-RateLimit-Remaining-Upstream` | Server's *last known* global remaining Pl@ntNet pool/500 — best-effort; unknown before first upstream call of the day |
 
 Client reading → UI “N of M identifications left today” chip (`UI_UX_DESIGN.md`).
+
+**Upstream quota headers (Pl@ntNet → PlantAI server, documented upstream contract):** identification responses also carry `RateLimit-Policy` (`"dailyQuota";q=…;w=86400;pk=…` — policy definition), `RateLimit` (`"dailyQuota";r=<remaining>;t=<seconds to reset>;pk=…` — remaining quota + reset timing), and `Retry-After` (RFC 7231 date, returned **with upstream HTTP 429**). PlantAI captures these server-side (never forwarded verbatim) to power `X-RateLimit-Remaining-Upstream` and the exact reset hint. The response **body** also carries `remainingIdentificationRequests` (quota remaining today).
 
 ### 2.6 Response contract (success)
 
@@ -199,10 +203,21 @@ Field rules:
 |---|---|
 | `species[]` | Max 10 entries, top-score-first (zero-cardinality rule: no requirement of exact count from upstream) |
 | `confidenceBand` | Derived from `score`: `score >= 0.7` → `"exact"`; `0.35 ≤ score < 0.7` → `"likely"`; `score < 0.35` → `"possible"` (thresholds are a PlantAI product choice, not upstream semantics — tune in Phase 2 after real-score inspection, note in `AI_INTEGRATION_PLAN.md`) |
-| `images[]` | Carries **CC-BY-SA-style citation** on every image (mandatory render obligation — [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Pl@ntNet images) |
+| `images[]` | Carries **CC-BY-SA-style citation** on every image (mandatory render obligation — [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Pl@ntNet images). In mock mode always `[]` — mock never fabricates botanical imagery or citations |
 | `careSummary` | Object with 4 strings + `plantLibrarySlug`, **or `null`** if no `plant_library` row matches the top species |
 | `cached` | `true` if served from `identification_cache` (no fresh upstream call); in that case `remainingQuota` reflects last-known upstream value |
 | `remainingQuota` | Caller's daily remainder (mirrors `X-RateLimit-Remaining`) |
+
+**Phase 2 additive fields (mock mode — see §7 v0.2.0):**
+
+| Field | Rule |
+|---|---|
+| `mode` | `"mock"` \| `"live"` — always present. `"mock"` results are example data and must NEVER be presented as real AI output (UI renders the demo banner; `sources: ["mock"]` on every candidate) |
+| `mockNotice` | Present in mock mode only: human-readable label, e.g. `"Demo result — PlantAI testing mode. This is not a real AI identification."` |
+| `careSummary.plantLibraryId` | Additive: the library row `id`, so the results UI can call the `savePlant` action directly |
+| `species[].plantLibrarySlug` | Additive (mock mode): seeded library slug per fixture candidate, for the "open full detail" affordance. Live mode may keep it post-normalization or drop it — resolve via `careSummary` there |
+
+**Mock-mode success example (Phase 2 live behavior, verified 2026-11-12):** top-level `mode:"mock"`, `mockNotice:"Demo result — PlantAI testing mode. This is not a real AI identification."`, `sources:["mock"]` on all candidates, `images:[]`, deterministic per image-set (seeded from the combined SHA-256).
 
 ### 2.7 Error responses
 
@@ -234,20 +249,24 @@ Example error body (`429`):
 
 **Failure-consumes-credit warning:** an upstream request that *errors* still costs 1 Pl@ntNet credit ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), verified since 2026-02-13) — this is exactly why steps 1–5 of the pipeline fail *before* upstream. Any request that gets past validation is assumed to be a plausible identify attempt.
 
+**Upstream 404 semantics (verified 2026-11-12):** Pl@ntNet rejects images identified as non-plants with **HTTP 404 "Species not found"** — this specific condition maps to PlantAI's `404 no_match_found` (same friendly UX as an empty result list). Other unexpected upstream 4xx responses are **not** no-matches: they are contract-drift/client-server mismatches and remain a distinct error path (planned code `upstream_rejected`, HTTP 502 — future-work item in `TASKS.md`; not yet implemented).
+
 ### 2.8 Pl@ntNet upstream mapping
 
 | Concern | Value / rule |
 |---|---|
-| Upstream endpoint | `POST https://my.plantnet.org/v2/identify/{project}` with `api-key` server-side (`ENVIRONMENT_SETUP.md`) |
-| Default project | `allplants` |
-| Regional project | If `latitude`/`longitude` given, the proxy queries a region-appropriate project (list from `GET /v2/projects`, a **quota-free** lookup route — [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)); exact project-mapping table lives in `AI_INTEGRATION_PLAN.md` (Phase 2 work; MVP falls back to `allplants` when no confident mapping exists) |
-| Upstream image count | We upload **all** the caller's images (1–3) under `images[]`; upstream expects the *same individual plant* per image set, which the UI enforces in copy |
-| Upstream organ | Pass-through from caller `organ`; `auto` omitted (upstream default) |
+| Upstream endpoint | **`POST https://my-api.plantnet.org/v2/identify/{project}`** (official API host — verified 2026-11-12; `my.plantnet.org` is the docs/portal site). Auth via the **`api-key` query parameter**. **The URL embeds the secret — never log full URLs; redact the key from every log/diagnostic/error path** (`ENVIRONMENT_SETUP.md`) |
+| Default project | **`all`** (official default; "set `project` to `all`" when no specific flora fits). Legacy projects are deprecated upstream — never sent |
+| Regional project | **Deferred, not in MVP:** `/v2/projects` accepts `lat`/`lon` (WGS84) and returns nearby projects — **that transmits the user's location to Pl@ntNet**. PlantAI's MVP sends **no GPS coordinates upstream**; if regional selection is ever adopted it requires explicit user consent + a documented privacy disclosure (LEGAL_AND_COMPLIANCE.md §2.6) |
+| Upstream image count | We upload all the caller's images (1–3 of the upstream max 5) under repeated `images` form fields; all must be the **same individual plant** (UI copy enforces; upstream rejects otherwise) |
+| Upstream organs | Upstream parameter is **`organs` (plural)**: one repeated value **per image, in image order**; identical values repeated for same-organ sets; **omitting the parameter = automatic detection for every image**. Valid values `leaf`/`flower`/`fruit`/`bark` (+`auto`). PlantAI's single `organ` caller field is mapped by the request builder (Stage B) — current zod/UI enum mismatch is a flagged future-work item (`TASKS.md`) |
 | Upstream body size | Pl@ntNet limit: ≤50 MB total, 1–5 images, JPEG/PNG ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)) — PlantAI's stricter 3×10 MB always fits |
-| Upstream response normalization | v2 shape: `results[]` with `score` 0–1, `species.scientificNameWithoutAuthor`, `commonNames`, `family.scientificNameWithoutAuthor`, `genus.scientificNameWithoutAuthor`, `gbif.id`, plus `images[]` w/ per-image `copyright`/license info. Mapping to §2.6 happens in `src/lib/plantnet/normalize.ts`; normalized shape is the **only** thing stored in `identifications.result` / `identification_cache.normalized_result`, so any v1→v2 or upstream drift is fixed at one file |
-| Upstream quota headers | `remainingIdentificationRequests` captured per response and persisted to the app's memory + logged, powering `X-RateLimit-Remaining-Upstream` |
-| Error-cost reality | Any non-2xx upstream response may consume 1 credit ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)) — therefore retry-on-failure is *avoided* in MVP (a transient network failure is surfaced as 502; the user manually retries) |
-| Key secrecy | `PLANTNET_API_KEY` read exclusively inside `src/lib/plantnet/` (server-only module, build-time error if imported client-side). **No CORS whitelisting is ever registered** for the API; no browser-visible config exposes the key |
+| Upstream response normalization | v2 shape: `results[]` with `score` 0–1, `species.scientificNameWithoutAuthor`, `commonNames`, `family.scientificNameWithoutAuthor`, `genus.scientificNameWithoutAuthor`, optional `gbif.id`/`powo.id`, per-image `images[]` with **actual** `author`/`license`/`citation` fields (returned per image — never assumed), plus `predictedOrgans`, `bestMatch`, `version`, `remainingIdentificationRequests`. Mapping to §2.6 happens in `src/lib/plantnet/normalize.ts`; normalized shape is the **only** thing stored in `identifications.result` / `identification_cache.normalized_result`, so upstream drift is fixed at one file. **Optional/absent image fields are handled conservatively** (see licensing row) |
+| Image licensing / display rule | Images are **usually** CC BY-SA but this is **not guaranteed per image** — use the actual returned `author`/`license`/`citation`. The Using-images doc establishes **CC BY-SA as the only documented reusable case** (attribution + ShareAlike; pattern `Photo(s): [Contributor] / Pl@ntNet, CC BY-SA`). PlantAI renders an upstream image **only** when its returned `license` is a documented-reusable value (currently `cc-by-sa`), always with contributor + Pl@ntNet credit + license; unknown/missing/unsupported license → **image not displayed**, candidate still shown. Free-plan "Powered by Pl@ntNet" mention is appreciated, not required — kept separate from per-image photo attribution |
+| Upstream quota signals | Response **body** field `remainingIdentificationRequests` (remaining today) + headers `RateLimit-Policy` / `RateLimit` (remaining + seconds-to-reset) / `Retry-After` (on upstream 429). Captured server-side → `X-RateLimit-Remaining-Upstream` + exact reset hints; never forwarded verbatim |
+| Upstream 404 semantics | Images identified as non-plants → upstream **404 "Species not found"** → PlantAI `404 no_match_found`. Other unexpected upstream 4xx ≠ no-match (distinct error path; planned `upstream_rejected`) |
+| Error-cost reality | Any non-2xx upstream response may consume 1 credit ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)) — therefore **retry-on-failure is avoided in MVP** (a transient network failure is surfaced as 502; the user manually retries). **No automatic retries** |
+| Key secrecy | `PLANTNET_API_KEY` read exclusively inside `src/lib/plantnet/` (server-only module, build-time error if imported client-side). **No CORS whitelisting is ever registered** for the API; no browser-visible config exposes the key; **the key must never appear in application logs** (query-parameter authentication makes URL redaction mandatory) |
 
 ### 2.9 Validation rules (client & server)
 
@@ -257,13 +276,13 @@ Duplicated intentionally at both boundaries (client gives pre-click UX; server g
 |---|---|---|---|
 | V1 | 1–3 images | File input `max` + accept filter; count from DOM files | Count form entries named `images[]`; reject 0 or >3 |
 | V2 | MIME `image/jpeg` \| `image/png` | `accept` + extension/UI check | Magic-byte sniff (first bytes: `FFD8FF` / `89504E47`) |
-| V3 | ≤**10 MB** per image | File.size + canvas pre-resize on exceed | Content-Length + buffer length re-check |
+| V3 | ≤**10 MB** per image | File.size check (canvas pre-resize on exceed: **planned, not yet implemented** — `TASKS.md` P2-01) | Content-Length + buffer length re-check |
 | V4 | total body ≤~32 MB |      (implicit) | Body content-length guard |
 | V5 | All photos = same plant | Copy in UI (“photos of the same individual”) | **Not verifiable automatically** — accepted on trust + upstream validation |
 | V6 | `organ` ∈ five-value enum | Select dropdown | zod enum, default `auto` |
 | V7 | lat/lon numeric ranges; only both-or-neither | Warn on one-without-other | zod refine (`both` XOR `neither`) |
 | V8 | Session cookie validity | (used transparently) | `middleware.ts` + `@supabase/ssr` parse; invalid cookie = anonymous treat (not an error) |
-| V9 | Filename/path safety | Sanitized on server before storage path assembly | Strip path separators; UUID storage name replaces original name entirely |
+| V9 | Filename/path safety | (planned — **no storage path assembly exists yet**; when Storage uploads ship, strip path separators and replace the original name entirely with a UUID storage name) | Strip path separators; UUID storage name replaces original name entirely |
 
 Any validation failure never touches Pl@ntNet (quota rule, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)).
 
@@ -414,6 +433,11 @@ Comprehensive plans, environments, and case matrices live in [`TESTING_PLAN.md`]
 
 | Date | Version | Change | Author |
 |---|---|---|---|
+| 2026-11-13 | 0.3.2 | **Stage D — mock/live response parity + fixture hardening (tests only; contract unchanged).** New offline suites: mock/live parity via a shared normalized-contract checker (both providers satisfy the same `SpeciesCandidate` shape after `normalizeSpecies`; mock output regression-pinned float-exact for a fixed hash; response envelope + candidate key sets frozen at the route level) and a real-route regression suite for `POST /api/identify` (validation/413/429/organ-400 paths, dedup, Stage B/C provider-error taxonomy end-to-end, persistence-OFF write-guard + fallback UUID, mockNotice parity, no URL/key/partition-key leaks in bodies or logs). Shared fixture module `tests/fixtures/plantnet/upstream-fixtures.ts` — SYNTHETIC, documentation-derived, explicitly labelled as not-real recordings; URLs use RFC 2606 `.invalid`. One-line additive change: mock candidates now carry `powoId: null` (identical optional-identifier contract as live). **No request/response contract change; 113/113 tests, lint 0 errors, typecheck clean, build exit 0**. Mock mode, persistence-OFF state, and the 0.2.x wire contract remain **unchanged** | Lead engineer (Stage D session) |
+| 2026-11-13 | 0.3.1 | **Stage C — upstream normalization, image licensing, organ validation, quota visibility.** (1) **Normalizer implemented** (`normalizeUpstreamResponse` in `src/lib/plantnet/normalize.ts`): maps verified upstream 200 responses into the PlantAI candidate structure using ONLY the documented Stage A1 field shapes (official identify output example: `species.{scientificNameWithoutAuthor, scientificNameAuthorship, scientificName, genus, family, commonNames}` + top-level `gbif:{id}`/`powo:{id}` siblings, string id forms); scientific name read verbatim or composed from documented fields only; scores preserved exactly (0–1 validated); GBIF ids digit-string→number value-preserving, POWO ids verbatim strings; malformed entries/images skipped defensively (one bad optional image never invalidates a candidate); empty results → HTTP 404 `no_match_found`; `normalizeSpecies` re-ranks + caps at 10 as before; `UpstreamNormalizerNotReadyError` superseded/removed. (2) **Image licensing:** `SpeciesImage.cc_by_sa: boolean` replaced by `license?: string` + `attribution: string` — images render ONLY for the documented reusable CC BY-SA license (conservative, case-insensitive, separator-normalized) AND a present contributor author; citation preserved verbatim when returned, attribution composed only from actual returned metadata (never fabricated); missing/unknown/unsupported license or missing author ⇒ image hidden, candidate stays visible. (3) **Organ validation (V6 correction):** canonical shared enum `src/lib/plantnet/organs.ts` (`leaf`/`flower`/`fruit`/`bark`/`auto`) used by the Zod schema AND the upload UI's new optional organ selector; invalid `lateral`/`root` rejected with HTTP 400 before any upstream call (dependency-free module so the client widget never bundles zod). (4) **Quota visibility:** `X-RateLimit-Remaining-Upstream` response header on identify success AND error paths, from verified sources only — `remainingIdentificationRequests` body field first, then the `r=` value of the `RateLimit` header parsed defensively (`parseRateLimitRemaining`); partition keys/API keys/URLs/reset times never exposed; no values invented; error taxonomy and no-retry policy unchanged. Offline tests added (`tests/upstream-normalize.test.ts`) + Stage B boundary tests updated; **80/80 tests, lint 0 errors, typecheck clean, build exit 0**. Mock behavior, persistence-OFF state, and the 0.2.x wire contract remain **unchanged**; `PLANTNET_MODE=mock` remains the enforced state | Lead engineer (Stage C session) |
+| 2026-11-13 | 0.3.0 | **Stage B — live provider implemented (NOT activated).** `src/lib/plantnet/live-provider.ts` added behind the existing `identify()` seam: verified Stage A1 upstream contract (`POST https://my-api.plantnet.org/v2/identify/{project}`, default project `all`, `api-key` query parameter, repeated `organs` per image in order, MIME from magic bytes, 20 s `AbortController` timeout, **no automatic retries**, no lat/lon/email/IP/user-ID, no deprecated params, URL/key/body/headers never logged — `redactUrlForLogs` strips the query string). Verified error taxonomy implemented: upstream 404 → `no_match_found`, 429 → `quota_exhausted`, other 4xx → `upstream_rejected` (route: HTTP 502), 5xx/network/timeout → `upstream_error`; quota capture: `RateLimit-Policy`/`RateLimit`/`Retry-After` + `remainingIdentificationRequests` (new additive `upstreamQuota` field). Wiring: `PLANTNET_MODE` not exactly `live`, or a missing/blank server-only key, fails safe to mock with a safe diagnostic; live module is lazy-imported and unreachable in mock mode. **Stage C dependency:** the upstream 200 → candidate mapping is a typed boundary (`UpstreamNormalizer`); until Stage C implements it, live 200s throw the typed `UpstreamNormalizerNotReadyError` — no mapping invented. Offline test suite added (28 cases, mocked fetch, dummy key only). Mock behavior, persistence-OFF state, and the 0.2.x wire contract are **unchanged**; `PLANTNET_MODE=mock` remains the enforced state | Lead engineer (Stage B session) |
+| 2026-11-12 | 0.2.1 | **Documentation alignment (Stage A2 — no code/contract change).** Corrected upstream facts throughout §2 from the Stage A1 official-doc verification ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), verified 2026-11-12): API host **`https://my-api.plantnet.org`** (was `my.plantnet.org`), default project **`all`** (was `allplants`), upstream parameter **`organs` (plural, repeated per image in order)** with valid values `leaf`/`flower`/`fruit`/`bark`+`auto` (was singular `organ` with invalid `lateral`/`root`), `api-key` **query-parameter** auth + **never log the full URL**, documented upstream headers `RateLimit-Policy`/`RateLimit`/`Retry-After`, upstream 404 "Species not found" (non-plant image) maps to `no_match_found` while other unexpected 4xx ≠ no-match, conservative image `author`/`license`/`citation` handling (CC BY-SA = only documented reusable case), regional-lookup deferred (MVP sends **no GPS upstream**). Mock behavior, persistence-OFF state, and the 0.2.0 wire contract are **unchanged** | Lead engineer (Stage A2 session) |
+| 2026-11-12 | 0.2.0 | **Phase 2 implementation.** `/api/identify` live in MOCK mode (`PLANTNET_MODE=mock` default; live provider not implemented — requires owner approval + valid server-only key). Additive success fields: `mode` (`"mock"`|`"live"`), `mockNotice` (mock only), `careSummary.plantLibraryId`, `species[].plantLibrarySlug` (mock only). Validation unchanged from §2.9 (verified: magic-byte sniff, 10 MB/image, 1–3 images). Persistence + durable `identification_cache` degrade to logged skip while the service_role credential is invalid; per-instance dedup cache keys `hash::organ` (drop-in swap ready). Rate limiting implemented per §5 with `X-RateLimit-*` headers verified live | Lead engineer (Phase 2 session) |
 | 2026-11-10 | 0.1.0 | Initial API contract: documented `/api/identify` request/response/error envelope, server-action catalog, rate-limiting strategy (in-memory MVP), future endpoints | Technical architect |
 
 *All future changes to any endpoint or action signature (breaking or additive) must add a row here, plus a note in [`CHANGELOG.md`](CHANGELOG.md).*

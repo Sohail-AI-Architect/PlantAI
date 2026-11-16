@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Botanical placeholder illustration">
+  <!--
+    Original PlantAI decorative artwork (created for this project, 2026-11-15).
+    No third-party license or attribution required. Used as the graceful
+    fallback when a plant has no verified photograph available — deliberately
+    an illustration, so it is never mistaken for a photo of the species.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecfdf5"/>
+      <stop offset="1" stop-color="#d1fae5"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <g opacity="0.55">
+    <path d="M400 470 C 380 340 420 220 540 150 C 560 300 520 420 400 470 Z" fill="#059669"/>
+    <path d="M400 470 C 390 380 350 300 260 260 C 270 380 320 450 400 470 Z" fill="#34d399"/>
+    <path d="M400 470 C 410 400 450 330 540 300 C 520 410 470 460 400 470 Z" fill="#10b981"/>
+    <path d="M400 470 L 400 560" stroke="#047857" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g opacity="0.35">
+    <path d="M120 180 C 110 120 150 70 220 50 C 225 130 190 170 120 180 Z" fill="#059669"/>
+    <path d="M680 140 C 690 90 660 40 590 30 C 590 100 620 135 680 140 Z" fill="#059669"/>
+  </g>
+</svg>

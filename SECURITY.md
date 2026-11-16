@@ -3,6 +3,8 @@
 > Scope: MVP security posture for PlantAI (Next.js App Router + Supabase + Pl@ntNet API v2, zero budget, deployed on Vercel). This document defines what we protect, how, and which risks we consciously accept.
 > Facts about Pl@ntNet, Supabase, and the stack (quotas, plans, terms) are cited from [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md). Anything stated here without a source below is **UNVERIFIED** until checked at implementation time.
 > Related: [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) · [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) · [`ENVIRONMENT_SETUP.md`](ENVIRONMENT_SETUP.md) · [`LEGAL_AND_COMPLIANCE.md`](LEGAL_AND_COMPLIANCE.md) · [`TESTING_PLAN.md`](TESTING_PLAN.md)
+>
+> **Phase 2 implementation status (2026-11-12):** session identity is verified server-side via `auth.getClaims()` (`src/lib/auth/session.ts`, `src/proxy.ts`) — `getSession()` user data is never trusted for authorization; identity claims are signature-verified per the current official Supabase SSR guidance. Auth inputs are validated client + server side; auth error messages are privacy-safe (never reveal account existence). `.env.local` verified git-ignored; no service-role key reaches client bundles (references live only in server-only modules guarded by `requireServerOnly()`); no raw IPs are logged — only a salted SHA-256 hash feeds the in-memory counter. Mock identification responses are transparently labelled (`mode:"mock"` + `mockNotice`) and never presented as real AI output.
 
 ---
 
@@ -52,14 +54,15 @@ Canonical names are fixed in CANONICAL PROJECT DECISIONS #6. No name may be rena
 | `NEXT_PUBLIC_SITE_URL` | `.env.local`, Vercel project env | Client (public by design) | No rotation needed (site URL, not a secret) |
 | `NEXT_PUBLIC_SUPABASE_URL` | `.env.local`, Vercel, Supabase dashboard → Project settings → API | Client (public by design; docs say anon key + URL are safe to expose *when RLS is on*) | Rotate only if project keys/scoped JWT settings change |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `.env.local`, Vercel, Supabase dashboard | Client (public; safe ONLY because every table has RLS) — **name updated 2026-11-10 per ADR-9 (new Supabase "Publishable key" naming; formerly `NEXT_PUBLIC_SUPABASE_ANON_KEY` in this doc's earlier versions)** | Rotate via Supabase "Regenerate key" if leaked; triggers brief client downtime until redeploy |
-| `SUPABASE_SERVICE_ROLE_KEY` | `.env.local`, Vercel (server-only), **never** in `NEXT_PUBLIC_*` | Server-only — bypasses RLS; treat as root credential | Rotate immediately on any suspected leak; consider scoped JWT/moving to Supabase Platform access tokens for automation (UNVERIFIED details) |
+| `SUPABASE_SECRET_KEY` | `.env.local`, Vercel (server-only), **never** in `NEXT_PUBLIC_*` | Server-only — bypasses RLS (`service_role` role); treat as root credential. **Canonical modern key per Supabase docs (2026): format `sb_secret_...`, name updated in Phase 2.5 (2026-11-12)**; a secret key is additionally rejected by Supabase when sent from a browser (`User-Agent` match → HTTP 401) | Rotate immediately on any suspected leak (Dashboard → API Keys); use one secret key per backend component to limit leak blast radius (official guidance) |
+| `SUPABASE_SERVICE_ROLE_KEY` (legacy) | `.env.local`, Vercel (server-only), **never** in `NEXT_PUBLIC_*` | Server-only legacy JWT — **deprecated by Supabase by end of 2026**; still accepted by this codebase as fallback via `getServerSupabaseSecretKey()` (env.ts) when `SUPABASE_SECRET_KEY` is unset. **Status 2026-11-12:** the local value is rejected by Supabase ("Invalid API key") — replace with `SUPABASE_SECRET_KEY` | Same rotation policy; consider disabling legacy keys in Dashboard → API Keys after migration (official migration guide) |
 | `PLANTNET_API_KEY` | `.env.local`, Vercel (server-only), from my.plantnet.org → settings → API key | Server-only | Rotate in Pl@ntNet account settings; on leak, rotate + re-deploy; abusive usage of a leaked key is attributed to OUR account |
 | `SUPABASE_DB_URL` (optional) | `.env.local` (dev only), Supabase dashboard | Server-only (local tooling) | Rotate password from dashboard if shared |
 
 ### 2.2 Rules (non-negotiable)
 
 1. **Never commit real keys.** `.env.local` is gitignored; only `.env.example` with placeholder values is committed. CI/setup checklist greps for key-shaped strings before commit (see [`TESTING_PLAN.md`](TESTING_PLAN.md) § Security testing).
-2. **`SUPABASE_SERVICE_ROLE_KEY` and `PLANTNET_API_KEY` must never appear in client bundles.** Enforcement with Next.js=prefix discipline:
+2. **`SUPABASE_SECRET_KEY` (modern) / legacy `SUPABASE_SERVICE_ROLE_KEY` and `PLANTNET_API_KEY` must never appear in client bundles.** Enforcement with Next.js=prefix discipline:
    - In **Server Components / Route Handlers / Server Actions**, read via `process.env.X` — only code paths reachable from the server see them. Next.js bundles `process.env.NEXT_PUBLIC_*` replacements (string interpolation at build time) into client code but **omits non-public variables** from client bundles. The practical rule: **a secret is only ever referenced inside files marked `'use server'`, Route Handlers, or server-only modules**.
    - Belt-and-braces: install `server-only` package and import it at the top of the Pl@ntNet proxy module and any service-role client module — an import from a Client Component then fails the build. (Approach UNVERIFIED against the Next.js major version chosen at scaffold; verify in Phase 1.)
    - Additional check in CI: grep the `.next` build for the literal values of secrets (see [`TESTING_PLAN.md`](TESTING_PLAN.md)).
@@ -80,8 +83,12 @@ Canonical names are fixed in CANONICAL PROJECT DECISIONS #6. No name may be rena
 The API key is treated as the most abusable secret (its abuse directly consumes our shared free quota). Rules:
 
 - **Server-only proxy.** All Pl@ntNet calls go through one server-side module (called from the `/api/identify` Route Handler and/or a Server Action). No client component may construct a Pl@ntNet URL. Rationale: free plan allows client-side CORS-whitelisted use, but PlantAI refuses that mode — key exposure + quota burn risk (per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)).
+- **Secret-in-query-parameter risk (verified 2026-11-12):** Pl@ntNet v2 authentication is the **`api-key` query parameter**, so the key is embedded in every request URL. Consequences:
+  - **The full request URL must NEVER appear in application logs, diagnostics, error reports, analytics, or user-facing output.** Log the route (`POST /v2/identify/{project}`) and a redacted form (`…/v2/identify/all?key=REDACTED`) only.
+  - Every error-reporting path (upstream 4xx/5xx handling, network-failure logging, dev-server output) must redact or strip query parameters before persisting anything.
+  - The key stays server-only: read exclusively inside `src/lib/plantnet/`, never serialized to the client, never included in fetch responses, never stored in cookies or localStorage.
 - **No CORS whitelisting** is performed on the Pl@ntNet side; we never enable browser-side calls.
-- **Log-only remaining quota.** The response headers/fields (`remainingIdentificationRequests`) are logged server-side for dashboards; they are not a security control (attacker-controlled input can't spoof them to us, providing them as "truth" would invite spoofing).
+- **Log-only remaining quota.** The response **body** field `remainingIdentificationRequests` and the documented upstream headers `RateLimit-Policy` / `RateLimit` / `Retry-After` ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), verified 2026-11-12) may be logged server-side for dashboards — **header values only, never the request URL**; they are not a security control (attacker-controlled input can't spoof them to us, providing them as "truth" would invite spoofing).
 - **Upstream errors map to 503, never 429 pass-through confusion.** Upstream HTTP 429 (quota exceeded, resets midnight UTC — [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)) is returned to clients as **HTTP 503 Service Unavailable** with a user-friendly message ("Our daily plant-recognition budget is exhausted; try again tomorrow"). Upstream 500s/998s also → 503. Rationale: a genuine 429 envelope means *quota exhausted*, not "you personally are over your limit"; exposing upstream semantics invites probing.
 - **Never send user PII upstream.** What IS sent to Pl@ntNet:
   - ✅ The 1–3 user images (required by the API), as multipart.
@@ -207,7 +214,7 @@ Reference table matrix (full DDL in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md)):
 | `saved_plants` | Owner | Owner | Owner | Owner |
 | `blog_posts` | Everyone if `published` else `admin` | `admin` | `admin` | `admin` |
 | `contact_messages` | `admin` | Anyone (form) but rate-limited | `admin` (status field) | `admin` |
-| `app_settings` | Server-only via service role; public read for opt-in keys only (via a policy narrowing `is_public_key`) | `admin` | `admin` | `admin` |
+| `app_settings` | Everyone — public read via `p_app_settings_read_all` (`for select using (true)`, verbatim `DATABASE_SCHEMA.md` §3.9 and migration 002; harmless because the table must never hold secrets) | `admin` | `admin` | `admin` |
 | `identification_cache` (optional) | server-only (service role) | server-only | — | server-only |
 
 - **Least privilege:** the anon key (client) can only reach rows a policy exposes; every client call must satisfy RLS directly. There is **no server-side "rails pattern" that lets the anon key bypass policy.**
@@ -215,6 +222,7 @@ Reference table matrix (full DDL in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md)):
 - **No direct SQL from client.** All DB access goes through typed supabase-js modules; no dynamic SQL string building anywhere (see §10).
 - **Identifications immutability:** the identification history cannot be edited by users (counts as honest usage records and prevents forged audit trails).
 - **No direct table grants for `app_settings` secrets** — the table stores MVP knobs (rate limits), not credentials; credentials live in env vars only (§2).
+- **Reconciled 2026-11-15:** this table previously described an `is_public_key`-narrowed read policy; the actual deployed policy is the verbatim `p_app_settings_read_all for select using (true)` from `DATABASE_SCHEMA.md` §3.9 / migration 002 (confirmed by `PRE_MIGRATION_SAFETY_REVIEW.md` §1.3 and `POST_MIGRATION_VERIFICATION_REPORT.md` §6 item 5). The secrets rule above is unchanged and remains binding.
 
 ---
 
@@ -231,7 +239,7 @@ Minimum is the maximum security here — we simply don't collect what we don't n
 | Photo(s) (identification images) | Yes, transient | Pl@ntNet identify | **90-day retention default** → deleted from `request-images` by cleanup job or manual cron (decision: automated cron if Vercel Cron + a service-role endpoint is cheapest; manual dashboard cleanup as fallback — decision to finalize in Phase 4/5, 90 days is the default retention from today). EXIF/GPS stripped client-side best-effort, not stored server-side |
 | Species result / confidence | Yes | Show results, save to plant library | On account deletion |
 | Coarse location | **No in MVP.** GPS coordinates are excluded entirely; no explicit consent gating is needed for them — if future features (region-aware floras, disease coverage) need GPS, they will be added only behind **explicit user consent** UI toggle, opt-in, and deletable with account data | — |
-| IP address (rate limiting) | Yes, transiently | Rate-limit counters | Not persisted server-side beyond in-memory scope; not sent to Pl@ntNet |
+| IP address (rate limiting) | Yes, transiently | Rate-limit counters | **Implemented Phase 2:** the raw IP never leaves request scope — only `SHA-256(ip + IP_HASH_SALT)` is held in the per-instance in-memory counter; not persisted, not logged, not sent to Pl@ntNet |
 | User-submitted plant names/notes | Yes | My Plants feature | On account deletion |
 | Contact message | Yes (form) | Support / feedback | Deleted after resolution (admin action) |
 

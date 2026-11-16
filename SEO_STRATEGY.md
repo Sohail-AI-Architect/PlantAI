@@ -185,7 +185,7 @@ Implementation: a single `JsonLd` component injecting `<script type="application
 `app/sitemap.ts` generates:
 
 - **Static routes always present:** `/`, `/identify`, `/library`, `/blog`, `/about`, `/contact`, `/privacy`, `/terms`, `/cookie-policy`, `/login`, `/signup` (last three are debatable; included initially, pruned if Search Console shows noise — they are not money pages).
-- **All published plant slugs** from Supabase (`plant_library` where `published = true`, `DATABASE_SCHEMA.md`).
+- **All published plant slugs** from Supabase (`plant_library` where `is_published = true`, `DATABASE_SCHEMA.md` §3.2 — canonical column name verified against migration 000 and the `/plant/[slug]` implementation).
 - **All published blog slugs** (Phase 4+; `blog_posts`).
 - Excluded: `/admin`, `/account`, `/my-plants`, `/saved-plants`, `/dashboard`, `/reminders`, `/api/*`.
 - **`lastmod` strategy:** timestamps come from real content `updated_at` fields in Supabase — not the build time (fake churn is a misuse signal); page-level revalidation triggers a regeneration of the sitemap rather than re-writing untouched entries.

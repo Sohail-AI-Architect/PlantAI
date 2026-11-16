@@ -236,9 +236,9 @@ create policy p_plant_library_write_admin on public.plant_library
 | `id` | `uuid` | PK | `gen_random_uuid()` | |
 | `user_id` | `uuid` | `REFERENCES auth.users(id) ON DELETE SET NULL` | `NULL` | `NULL` = anonymous identification |
 | `image_paths` | `text[]` | `NOT NULL DEFAULT '{}'` | `'{}'` | Storage paths inside private `request-images` bucket (≤3 entries; see §6) |
-| `organ` | `text` | `CHECK (organ IN ('flower','leaf','lateral','root','auto'))` | `'auto'` | Pl@ntNet organ hint used |
-| `latitude` / `longitude` | `numeric(10,7)` | `CHECK (latitude BETWEEN -90 AND 90)` / `CHECK (longitude BETWEEN -180 AND 180)` | `NULL` | Optional regional-flora location |
-| `project` | `text` | `NOT NULL` | `'allplants'` | Pl@ntNet project/flora used |
+| `organ` | `text` | `CHECK (organ IN ('flower','leaf','lateral','root','auto'))` | `'auto'` | Pl@ntNet organ hint used. **⚠ Existing-schema mismatch (flagged 2026-11-12, NOT yet migrated):** the upstream contract (verified) uses **`organs` (plural, one per image)** with valid values `leaf`/`flower`/`fruit`/`bark`+`auto`; this column's CHECK still contains invalid values (`lateral`/`root`) and lacks `fruit`/`bark`. Migration = **future owner-authorized task** (`TASKS.md` future work) — do not change application behavior until approved |
+| `latitude` / `longitude` | `numeric(10,7)` | `CHECK (latitude BETWEEN -90 AND 90)` / `CHECK (longitude BETWEEN -180 AND 180)` | `NULL` | Optional regional-flora location. **Not used in MVP** — PlantAI sends no GPS coordinates upstream (Stage A1, 2026-11-12); regional-flora restriction is a documented future option |
+| `project` | `text` | `NOT NULL` | `'allplants'` | Pl@ntNet project/flora used. **⚠ Existing-schema mismatch (flagged 2026-11-12, NOT yet migrated):** the verified upstream default project is **`all`** (`allplants` is not the documented default). Migration/seed decision = **future owner-authorized task** (`TASKS.md` future work). **Stage F1/F2 note (2026-11-14):** the application now writes `project = "all"` EXPLICITLY on every identification write (`PERSISTED_PROJECT`, persistence.ts) — stored values are provenance-correct; only the column DEFAULT itself remains `'allplants'` until the owner-approved F-3 migration |
 | `hash` | `text` | — | `NULL` | Perceptual hash of primary image (dedup/analytics; not FK) |
 | `best_match_scientific_name` | `text` | — | `NULL` | App-level join to `plant_library` for `careSummary` & stats |
 | `best_match_score` | `numeric(5,4)` | `CHECK (best_match_score BETWEEN 0 AND 1)` | `NULL` | Pl@ntNet v2 0–1 score |
@@ -562,8 +562,8 @@ create policy p_app_settings_write_admin on public.app_settings
 | `id` | `uuid` | PK | `gen_random_uuid()` | |
 | `p_hash` | `text` | `NOT NULL` | — | 64-hex perceptual hash of primary image |
 | `p_hash_variants` | `text[]` | `NOT NULL DEFAULT '{}'` | `'{}'` | Hashes of other images in the request (dedup on any image) |
-| `project` | `text` | `NOT NULL` | `'allplants'` | Pl@ntNet project the result belongs to |
-| `organ` | `text` | — | `'auto'` | Organ used (cache key part; same photo + different organ can differ) |
+| `project` | `text` | `NOT NULL` | `'allplants'` | Pl@ntNet project the result belongs to. **⚠ Existing-schema mismatch (flagged 2026-11-12):** verified upstream default project is **`all`** — migration is a future owner-authorized task (`TASKS.md` future work). **Stage F1/F2 note (2026-11-14):** the application now writes `project = "all"` EXPLICITLY (`PERSISTED_PROJECT`) and upserts with conflict target `(p_hash, project, organ)` — cache keys are written with the verified project regardless of the column default |
+| `organ` | `text` | — | `'auto'` | Organ used (cache key part; same photo + different organ can differ). **⚠ Existing-schema mismatch:** upstream valid values are `leaf`/`flower`/`fruit`/`bark`+`auto` (`lateral`/`root` invalid) — this cache column has no CHECK so no data error, but the value set written here must follow the corrected enum once the request builder is implemented |
 | `normalized_result` | `jsonb` | `NOT NULL` | — | Same shape as `identifications.result` (API_DOCUMENTATION.md) |
 | `top_score` | `numeric(5,4)` | — | `NULL` | Fast prefilter for cache quality stats |
 | `hit_count` | `integer` | `NOT NULL` | `0` | Cache hit stat |

@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import type { Viewport } from "next";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { BottomNav } from "@/components/layout/bottom-nav";
 
 /*
  * Root layout — PlantAI Phase 1 skeleton.
@@ -18,7 +21,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
  *   canonical/metadataAbsolute URLs resolve (ENVIRONMENT_SETUP.md §5).
  */
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -32,7 +35,11 @@ export const metadata: Metadata = {
     template: "%s | PlantAI",
   },
   description:
-    "Identify plants from photos with AI-powered plant identification, then learn watering, sunlight, soil and fertilizer basics from a growing plant library. (In development — public launch content ships in Phase 3.)",
+    "Identify plants from photos with AI-powered plant identification, then learn watering, sunlight, soil and fertilizer basics from a growing, human-written plant library.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#059669",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -40,8 +47,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="bg-background text-foreground flex min-h-dvh flex-col">
         <SiteHeader />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 pb-20 md:pb-0">{children}</main>
         <SiteFooter />
+        <Suspense
+          fallback={
+            <div
+              aria-hidden="true"
+              className="border-border-muted bg-surface fixed inset-x-0 bottom-0 z-40 h-16 border-t md:hidden"
+            />
+          }
+        >
+          <BottomNav />
+        </Suspense>
       </body>
     </html>
   );

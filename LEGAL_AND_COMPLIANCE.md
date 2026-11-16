@@ -67,7 +67,7 @@ Mandatory sections to write at authoring time:
 | Display name | Optional | Explicitly optional at signup |
 | Identification photos | Yes | Uploaded for ID; private storage bucket (DATABASE_SCHEMA.md, SECURITY.md) |
 | Species results / identification history | Yes | Rows tied to the account |
-| Coarse GPS / location | **Only with explicit consent**, per session, never inferred | Used to enable Pl@ntNet regional-flora restriction (accuracy benefit); refusable with no feature loss beyond regional precision (AI_INTEGRATION_PLAN.md) |
+| Coarse GPS / location | **Not sent in MVP** (Stage A1, 2026-11-12) | PlantAI's MVP sends **no GPS coordinates to Pl@ntNet**; the coarse-GPS consent flow remains a documented future option solely for regional-flora restriction, gated on explicit consent + a privacy disclosure if ever adopted (AI_INTEGRATION_PLAN.md §2.1) |
 | Technical logs (server-side) | Yes (operational) | Vercel request logs nature per its standard logging — exact fields UNVERIFIED, reflect at authoring time |
 | Ad data (Google) | Phase 5+ only, post-consent | AdSense cookie/ad identifiers — section dormant until ads enable |
 
@@ -98,7 +98,7 @@ Mandatory sections to write at authoring time:
 |---|---|---|---|
 | **Supabase** | Account data, DB rows, image files | BaaS: auth, database, storage | **Region is selectable at project creation** — note the consideration of choosing an **EU region** for GDPR friendliness; decision recorded in PROJECT_PLAN.md owner questions (§13) |
 | **Vercel** | Request data, deployment artifacts | Hosting/runtime | Hobby-plan usage is non-commercial today; ads change hosting (MONETIZATION_PLAN.md §2) |
-| **Pl@ntNet** | Uploaded photo (+ location if consented) | The identification request itself | Disclosed plainly: photos go to Pl@ntNet to produce results (AI_INTEGRATION_PLAN.md §Data & learning ethics); free-plan rules per docs/VERIFIED_FACTS.md |
+| **Pl@ntNet** | Uploaded photo (never location in MVP) | The identification request itself | Disclosed plainly: photos go to Pl@ntNet to produce results (AI_INTEGRATION_PLAN.md §Data & learning ethics). **Retention verified 2026-11-12 (terms of use):** Pl@ntNet keeps submitted photos only in **volatile server memory during processing** — not stored — **but retains query history (date, time, submitted image URL references) tied to the API account**. This upstream retention is **distinct from PlantAI's own Supabase Storage retention**; privacy copy must not claim "nothing is stored" based on the upstream practice (docs/VERIFIED_FACTS.md) |
 | **Google AdSense** | Cookie/ad identifiers, page data | Ad serving | Only when enabled (Phase 5/6) and consent-gated for EU/UK |
 | Hosting DNS provider | DNS traffic | Domain | Named at authoring time |
 
@@ -198,9 +198,10 @@ The AI-accuracy + plant-safety claim surface (linked from every guide and result
 
 ## 7. Attribution (Pl@ntNet + data sources)
 
-**Verified basis** (docs/VERIFIED_FACTS.md, Pl@ntNet section): on the **free plan**, the
-"Powered by Pl@ntNet" logo is *appreciated but not required*. PlantAI displays attribution anyway
-(good practice, licence clarity, SEO honesty).
+**Verified basis** (docs/VERIFIED_FACTS.md, Pl@ntNet section — Stage A1, 2026-11-12): on the
+**free plan**, the "Powered by Pl@ntNet" logo is *appreciated but not required* (required only on
+the Non-profit plan). PlantAI displays attribution anyway (good practice, licence clarity, SEO
+honesty). Per-image photo attribution and the optional platform logo are **separate obligations**.
 
 - **Recommended sentence (verbatim, per Pl@ntNet terms as verified):**
   *"The image-based plant species identification service used, is based on the Pl@ntNet recognition
@@ -210,12 +211,16 @@ The AI-accuracy + plant-safety claim surface (linked from every guide and result
   2. **Every identify-results footer** — short-line attribution with link: "Identification by
      Pl@ntNet" (component built in UI_UX_DESIGN.md results spec).
   3. Any jurisdisction-specific legal page that lists third-party processors (§2.6) — name Pl@ntNet.
-- **cc-by-sa image citations display pattern:** illustration images returned by the API carry
-  citations of the form seen in the verified facts (e.g. `Pomme Pépin / Pl@ntNet, cc-by-sa`). Pattern:
-  render the citation string **adjacent to each third-party image** (caption or title attr + visible
-  small-print under the image in the library entry). Exact reuse/citation rule detail still to be
-  read from Pl@ntNet's "Using images" doc in Phase 2 (**UNVERIFIED**, facts-file research item #3) —
-  gating item before any third-party image is displayed.
+- **cc-by-sa image citations display pattern (verified 2026-11-12, "Using images" doc):**
+  returned image objects carry **actual** `author`, `license` and `citation` fields (e.g. citation
+  form `Fabrice Rubio / Pl@ntNet, cc-by-sa`). Images are **usually** CC BY-SA — Attribution +
+  ShareAlike — and the documented attribution pattern is
+  `Photo(s): [Contributor] / Pl@ntNet, CC BY-SA`. Render the returned citation string **adjacent to
+  each third-party image** (caption or title attr + visible small-print under the image in the
+  library entry). **CC BY-SA is the only documented reusable case; the full license-value vocabulary
+  is not documented — PlantAI therefore displays an upstream image only when its returned `license`
+  is a documented-reusable value, and unknown/missing/unsupported license values prevent image
+  display** (display rule in API_DOCUMENTATION.md §2.8).
 - **Other data sources:** if taxonomy IDs from sources like **GBIF** are ever displayed in the
   library, an equivalent provider citation line is added to both `/about` and the page template.
   Current MVP shows vendor IDs only where the data came from — source-mapping lives in

@@ -34,6 +34,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the committed template (placeholders only — never real values).
+# Real environment/secret files (.env.local, .env.*.local, any other .env*)
+# remain ignored because only this exact name is negated.
+!.env.example
 
 # vercel
 .vercel

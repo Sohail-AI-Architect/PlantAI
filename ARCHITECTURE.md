@@ -133,6 +133,7 @@ Canonical decisions reflected here: Vercel Hobby hosting (non-commercial only), 
                      ┌───────────────▼───────────────┐
                      │  Pl@ntNet API v2  (server-side)│
                      │  POST /v2/identify/{project}  │
+                     │  host my-api · project all    │
                      │  500 idents/day · 20 conc.    │
                      │  (docs/VERIFIED_FACTS.md)     │
                      └───────────────────────────────┘
@@ -325,8 +326,8 @@ Quotas and rules below are cited from [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_F
    │                          │   [hit → skip to step 9]       │                    │
    │                          │ 5 concurrency semaphore gate   │                    │
    │                          ├── POST /v2/identify/{project} ─────────────────────► │
-   │                          │    (project = allplants or     │                    │
-   │                          │     regional project w/ lat/lon)                    │
+   │                          │    (host my-api.plantnet.org;  │                    │
+   │                          │     project = all (no lat/lon)                     │
    │                          │◄─── scores, sources, images ───┼────────────────────┤
    │                          │ 6 normalize + band labels      │                    │
    │                          │   (429 upstream → 503 ours,    │                    │
@@ -344,11 +345,11 @@ Steps 4, 7, 8 are the **quota-protection trio** (canonical decision #4): dedup c
 
 ### 8.3 Image-selection guidance surfaced in the UI
 
-The upload UI instructs (Phase 2): 1–3 photos of the **same** individual plant, ideally (a) a whole-plant shot, (b) a leaf top-side closeup, (c) a flower/fruit if present. Fewer-but-sharp beats more-but-ambiguous. The `organ` hint (flower/leaf/lateral/root/auto from Pl@ntNet's organ enum) is exposed as optional advanced field.
+The upload UI instructs (Phase 2): 1–3 photos of the **same** individual plant, ideally (a) a whole-plant shot, (b) a leaf top-side closeup, (c) a flower/fruit if present. Fewer-but-sharp beats more-but-ambiguous. The optional organ hint's **verified upstream enum is `leaf`/`flower`/`fruit`/`bark` (+`auto`; omitted = automatic detection)** — the current code/UI enum containing `lateral`/`root` is a **flagged mismatch** (future-work item in `TASKS.md`, to be fixed at the zod/UI + request-builder layer, not a doc fix).
 
 ### 8.4 Cache, fallbacks & regional flora
 
-- **Project choice:** default `allplants`; when lat/lon supplied, PlantAI queries a matching **regional project** in the same request (or as a second call only if the primary yields no confident match — implement in Phase 2, note in `AI_INTEGRATION_PLAN.md`). Project list route `/v2/projects` doesn't consume quota ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Pl@ntNet quota model).
+- **Project choice (corrected 2026-11-12, Stage A1):** upstream default project is **`all`** (official docs; `allplants` was a stale assumption and is NOT the documented default). **Regional flora lookup is DEFERRED and NOT in MVP:** `/v2/projects` accepts `lat`/`lon`, but calling it per-request would transmit the user's location to Pl@ntNet — PlantAI sends **no GPS coordinates upstream**; regional selection is a documented future option requiring explicit consent + privacy disclosure (`AI_INTEGRATION_PLAN.md` §2.1, `LEGAL_AND_COMPLIANCE.md` §2.6). `/v2/projects` and `/v2/languages` are documented as quota-free routes ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Pl@ntNet).
 - **Cached hit:** skips upstream entirely; `remainingQuota` reports the last-known upstream figure (or cached sentinel) — exact behavior in `API_DOCUMENTATION.md`.
 - **Fallback ladder:** (1) validation rejects early; (2) cache returns known results; (3) upstream 429 → our 503 + “quota reached” page state; (4) no match → 404-style user state + retry suggestions. None of these consume user-facing errors and only (3,4) consume upstream credits.
 - **Non-MVP note:** the disease route `/v2/diseases/identify` is **BETA, small species/pathogen coverage, same quota** ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)) — stays Phase 7 per canonical decision #8. MVP delivers **educational disease guides** (library content), not diagnosis.

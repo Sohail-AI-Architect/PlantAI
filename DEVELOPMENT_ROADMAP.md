@@ -1,6 +1,6 @@
 # PlantAI — Development Roadmap
 
-> **Document:** DEVELOPMENT_ROADMAP.md · **Phase:** 0 (Planning & Documentation) · **Status:** Draft for user approval
+> **Document:** DEVELOPMENT_ROADMAP.md · **Phase:** 2 complete (implementation 2026-11-11/12; report: `PHASE_2_COMPLETION_REPORT.md`) · **Status:** awaiting owner review + Phase 3 approval gate
 >
 > Per-phase execution plan for Phases 0–7: goals, prerequisites, numbered task breakdowns (with REQUIREMENTS.md IDs and ARCHITECTURE.md component references), dependencies, S/M/L complexity, exit criteria, explicit exclusions, first-session guidance, dependency graph, assumptions, per-phase risk register, and change management.
 >
@@ -121,7 +121,7 @@ action by design. Full results: `PHASE_1_COMPLETION_REPORT.md`.
 | 2.6 | Results UI: top-3 + confidence bars + images/attributions + care summary slot + save nudge | 2.2 | FR-RES-001..006 | M |
 | 2.7 | State design implementation: loading, quota-reached (internal + Pl@ntNet 429), degraded/error (AI_INTEGRATION_PLAN matrix) | 2.2–2.4 | FR-ID-004..006, NFR-R-001 | M |
 | 2.8 | Attribution component (Pl@ntNet sentence + "Powered by Pl@ntNet" + CC-BY-SA captions) reused sitewide | 2.6 VERIFIED_FACTS | FR-ID-008, FR-BIZ-002 | S |
-| 2.9 | Verify Pl@ntNet image-reuse rules (docs/VERIFIED_FACTS.md pending #3) & lock citation format | 2.8 | FR-RES-004 | S |
+| 2.9 | Verify Pl@ntNet image-reuse rules (docs/VERIFIED_FACTS.md pending #3) & lock citation format — **✅ DONE via Stage A1 (2026-11-12):** "Using images" doc verified — CC BY-SA is the documented reusable case (Attribution + ShareAlike, pattern `Photo(s): [Contributor] / Pl@ntNet, CC BY-SA`); display rule = only show images whose returned `license` is documented-reusable (`API_DOCUMENTATION.md` §2.8, `LEGAL_AND_COMPLIANCE.md` §7); license normalization is a flagged future-work item in `TASKS.md` | 2.8 | FR-RES-004 | S |
 | 2.10 | Minimal `/plant/[slug]` renderer for seeded demo plants (full library in Phase 3) | 2.6, 1.4 | FR-PLANT-001..003 | S |
 | 2.11 | TESTING_PLAN.md Phase-2 cases executed (incl. 429 simulation & dedup replay) | all | AC-UP/FL/RE-* | M |
 
@@ -131,6 +131,12 @@ action by design. Full results: `PHASE_1_COMPLETION_REPORT.md`.
 **Day-1 of Phase 2 (first development session) — see §10 for the ordered checklist.**
 
 ## 5. Phase 3 — Content & SEO (MVP completion)
+
+> **Numbering note (2026-11-12):** the owner's stage plan redefines "Phase 3" as **live Pl@ntNet
+> integration (stages A–H, recorded in `TASKS.md`)**; this section keeps the historical
+> "Phase 3 = Content & SEO" numbering and its tasks unchanged. Live-identification stages are
+> tracked separately in `TASKS.md` (stages A–H), with gates B (provider code), F (persistence —
+> separate owner approval), G (one authorized live smoke), H (production activation — owner only).
 
 - **Goal:** fill the content frame: library, plant pages with care guides, static pages, blog shell, SEO plumbing → **MVP = M3**.
 - **Prerequisites:** M2.

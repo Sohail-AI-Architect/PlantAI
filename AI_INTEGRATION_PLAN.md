@@ -8,6 +8,16 @@
 > **Rule:** every claim about Pl@ntNet behavior/quotas/limits is cited from docs/VERIFIED_FACTS.md.
 > Everything else about third-party specifics is marked **UNVERIFIED**. No model names, weights, or
 > vendors are researched or added without explicit written approval (canonical decision 5).
+>
+> **Phase 2 implementation status (2026-11-12):** identification runs **MOCK mode only**
+> (`PLANTNET_MODE=mock`, the default). The mock provider (`src/lib/plantnet/mock-provider.ts`)
+> makes zero external/network calls, is deterministic (seeded from the combined SHA-256 of the
+> image bytes), mirrors the 10 seeded `plant_library` species, and stamps `sources:["mock"]` on
+> every candidate. Results are transparently labelled `mode:"mock"` + `mockNotice` in the API and
+> a "Demo result — testing mode" banner in the UI — a mock result is never presented as a real AI
+> identification. The provider adapter seam (`src/lib/plantnet/provider.ts`) is live-provider
+> ready: one future `live-provider.ts` file implements the same `identify()` signature; no live
+> Pl@ntNet call, key use, or quota consumption exists anywhere in this phase.
 
 ---
 
@@ -49,14 +59,16 @@ at planning level (all verified in docs/VERIFIED_FACTS.md, Pl@ntNet section):
 
 | Behavior | Verified fact |
 |---|---|
+| Endpoint | **`POST https://my-api.plantnet.org/v2/identify/{project}`** — official API host (verified 2026-11-12; `my.plantnet.org` is the docs/portal site, not the API). Auth via the **`api-key` query parameter** → the URL embeds the secret and is **never logged** (redaction required in all logs/diagnostics) |
 | Cost | Free plan **€0**, 500 identifications/day, commercial use allowed up to that cap |
 | Quota reset | Midnight UTC; over-quota → **HTTP 429** until reset |
 | Error credit burn | Since 2026-02-13 an errored request **also consumes 1 credit** → strict client/server-side upload validation is a quota-protection design point |
 | Concurrency | Max **20 simultaneous requests** per client |
 | Images | **1–5 images**, same individual plant, `image/jpeg`/`image/png`, POST ≤ 50 MB, auto-resized to 1280px (smaller side) |
+| Organs | Upstream parameter is **`organs` (plural)** — one repeated value **per image, in image order**; omitting it = automatic detection for every image. Valid values `leaf`/`flower`/`fruit`/`bark` (+`auto`). PlantAI's UI may show the detected organ but MVP relies on auto-detection (UI organ hint is a flagged future-work item in `TASKS.md`) |
 | Scores | Confidence **0–1** |
-| Floras | Regional/thematic projects to restrict results (crops, invasive, useful plants…) |
-| Rate-limit visibility | `remainingIdentificationRequests` + rate-limit headers in each response → surfacing remaining quota in the server proxy is cheap |
+| Floras/projects | Regional/thematic projects restrict results (crops, invasive, useful plants…). **Default project: `all`** ("set `project` to `all`" per official docs). Legacy projects are deprecated upstream — never sent |
+| Rate-limit visibility | Response **body** field `remainingIdentificationRequests` + headers `RateLimit-Policy` / `RateLimit` (remaining + seconds-to-reset) / `Retry-After` (RFC 7231 date, on HTTP 429) → surfacing remaining quota in the server proxy is cheap |
 | Key secrecy | API key is private; client-side use requires CORS whitelisting → PlantAI **never** calls Pl@ntNet from the browser; server route only (ARCHITECTURE.md) |
 
 ### 2.1 Image selection strategy (accuracy guidance)
@@ -65,9 +77,11 @@ at planning level (all verified in docs/VERIFIED_FACTS.md, Pl@ntNet section):
   organs → better discrimination). Exceeding ~3 rarely helps and burns server-side validation cost.
 - Pl@ntNet **auto-detects organ**; PlantAI does not need organ labels but the UI shows it
   ("leaf detected") when possible.
-- **Regional flora option when GPS provided:** if the user consents to coarse location, the request
-  restricts to the matching regional flora for materially better top-1 results. Consent is explicit
-  and refusable (LEGAL_AND_COMPLIANCE.md §2.2; UI_UX_DESIGN.md).
+- **Regional flora option — DEFERRED, not in MVP (Stage A1, 2026-11-12):** the `/v2/projects` route accepts
+  `lat`/`lon` and could restrict results to a regional flora, but **that transmits the user's location to
+  Pl@ntNet**. PlantAI's MVP sends **no GPS coordinates upstream**; if regional selection is ever adopted it
+  requires explicit consent + a documented privacy disclosure (LEGAL_AND_COMPLIANCE.md §2.6), and MVP falls
+  back to the default project `all`.
 - Client-side validation (file type/size, plant-ish prompt, min resolution) exists mainly to protect
   the quota given the error-credit-burns rule above.
 
