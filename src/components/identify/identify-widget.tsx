@@ -4,6 +4,10 @@ import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 
 import { IdentifyResults, type IdentifyPayload } from "@/components/identify/identify-results";
 import { PlantCamera } from "@/components/identify/camera/plant-camera";
 import {
+  UPLOAD_MAX_BYTES,
+  compressImageFile,
+} from "@/lib/identify/image-compression";
+import {
   DEFAULT_ORGAN,
   ORGANS,
   ORGAN_LABELS,
@@ -17,6 +21,13 @@ import {
  * upstream credit on the live provider later, docs/VERIFIED_FACTS.md):
  * JPEG/PNG only, ≤ 10 MB each, 1–3 images — matching the server contract
  * exactly (client checks are UX; the server re-validates everything).
+ *
+ * Post-deployment hardening (Stage 2B): files larger than ~1.5 MB are
+ * re-encoded ON DEVICE (canvas, quality ladder ≤ 2048px JPEG) before
+ * upload, so a submission of 3 photos stays reliably under the ~6 MB
+ * Netlify Functions request-body limit (src/lib/identify/image-compression.ts).
+ * Compression degrades honestly — if it fails, the original file continues
+ * through the normal validation path.
  *
  * Two primary photo sources (task §2):
  *   A. "Take a photo" — real live camera via the PlantCamera component
@@ -33,7 +44,6 @@ import {
 
 const ACCEPT = ["image/jpeg", "image/png"] as const;
 const MAX_IMAGES = 3;
-const MAX_BYTES = 10 * 1024 * 1024;
 
 interface DraftImage {
   file: File;
@@ -63,20 +73,28 @@ export function IdentifyWidget({ isAuthenticated }: IdentifyWidgetProps) {
   }, []);
 
   const addFiles = useCallback(
-    (incoming: FileList | File[]) => {
+    async (incoming: FileList | File[]) => {
       setError(null);
       const accepted: DraftImage[] = [];
-      for (const file of Array.from(incoming)) {
+      for (const original of Array.from(incoming)) {
         if (images.length + accepted.length >= MAX_IMAGES) {
           setError(`Up to ${MAX_IMAGES} photos — the same individual plant, different angles.`);
           break;
         }
-        if (!(ACCEPT as readonly string[]).includes(file.type)) {
+        if (!(ACCEPT as readonly string[]).includes(original.type)) {
           setError("Only JPEG or PNG photos are supported.");
           continue;
         }
-        if (file.size > MAX_BYTES) {
+        if (original.size > UPLOAD_MAX_BYTES) {
           setError("One of the photos is over 10 MB — try a smaller version.");
+          continue;
+        }
+        // Large files are optimized on-device BEFORE the upload (Netlify
+        // Functions cap request bodies at ~6 MB). Failure here keeps the
+        // original — the post-compression check below stays authoritative.
+        const { file } = await compressImageFile(original);
+        if (file.size > UPLOAD_MAX_BYTES) {
+          setError("One of the photos could not be reduced enough to upload — try a smaller version.");
           continue;
         }
         accepted.push({ file, previewUrl: URL.createObjectURL(file) });
@@ -89,13 +107,13 @@ export function IdentifyWidget({ isAuthenticated }: IdentifyWidgetProps) {
   );
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files) addFiles(event.target.files);
+    if (event.target.files) void addFiles(event.target.files);
     event.target.value = ""; // allow re-selecting the same file
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
-    if (event.dataTransfer?.files.length) addFiles(event.dataTransfer.files);
+    if (event.dataTransfer?.files.length) void addFiles(event.dataTransfer.files);
   }
 
   function removeImage(index: number) {
@@ -128,7 +146,9 @@ export function IdentifyWidget({ isAuthenticated }: IdentifyWidgetProps) {
         return;
       }
       if (response.status === 413) {
-        setError("The photos are too large. Each photo must be 10 MB or less.");
+        setError(
+          "The upload was still too large after automatic optimization. Try fewer photos, or smaller files."
+        );
         return;
       }
       if (!response.ok) {
@@ -207,7 +227,9 @@ export function IdentifyWidget({ isAuthenticated }: IdentifyWidgetProps) {
           >
             <p className="text-sm font-medium">Photos of the same plant, up to 3.</p>
             <p className="text-foreground-muted mt-1 text-xs">
-              Best organs: leaf, flower, fruit. JPEG or PNG, up to 10 MB each.
+              Best organs: leaf, flower, fruit. JPEG or PNG, up to 10 MB each —
+              larger photos are automatically optimized on your device before
+              upload.
               The camera preview stays fully on your device — photos upload
               only when you identify.
             </p>
@@ -330,7 +352,9 @@ export function IdentifyWidget({ isAuthenticated }: IdentifyWidgetProps) {
           explicit "Take a photo" action (never automatic). */}
       <PlantCamera
         open={cameraOpen && !analyzing}
-        onConfirm={(file) => addFiles([file])}
+        onConfirm={(file) => {
+          void addFiles([file]);
+        }}
         onClose={(reason) => {
           setCameraOpen(false);
           if (reason === "confirm") {

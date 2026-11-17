@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import Image from "next/image";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PlantImage } from "@/components/plants/plant-image";
@@ -11,7 +12,16 @@ import { HERO_IMAGE, PLANT_LIBRARY_IMAGES } from "@/lib/plant-images";
  * /identify (mock/demo mode — the MockDemoBanner on that page states this
  * honestly). Copy never overclaims: identification results are AI-assisted,
  * not a disease diagnosis, and the library grows with human-written guides.
+ *
+ * SEO (Stage 2C, live-verified gap): every other public page declares its
+ * own canonical URL — the homepage was the one page without one (its title/
+ * description correctly fall through to the root layout default, but
+ * `alternates.canonical` must be declared here, NOT in the root layout,
+ * or it would hijack child pages that don't override it).
  */
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const FEATURES = [
   {
@@ -46,6 +56,26 @@ export default function HomePage() {
           "@type": "WebSite",
           name: "PlantAI",
           url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+          description:
+            "Identify plants from photos with AI-powered plant identification, then learn watering, sunlight, soil and fertilizer basics from a growing, human-written plant library.",
+          inLanguage: "en",
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "PlantAI",
+          applicationCategory: "EducationalApplication",
+          operatingSystem: "Web",
+          url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+          description:
+            "Free web application for AI-assisted plant identification and human-written plant care guides.",
+          offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "USD",
+          },
         }}
       />
       <section className="border-border-muted bg-surface-muted border-b">

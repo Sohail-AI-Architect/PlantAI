@@ -1,5 +1,7 @@
 # PlantAI — Deployment Guide
 
+> ⚠️ **Status update (2026-11-17):** production hosting has been decided and implemented — PlantAI is deployed on **Netlify Free** (<https://strong-mochi-e3869f.netlify.app>), chosen over Vercel Hobby because Vercel's Hobby plan is non-commercial-only (see below and the Phase 5 hosting decision). The Vercel-specific instructions in this guide are **historical reference only**; for the current deployment path, environment-variable scopes, and platform limits see the Stage 2A Netlify deployment checklist (kept internal to the project; the essentials are summarized in `README.md`). The Supabase guidance in this document remains accurate.
+>
 > Purpose: how PlantAI goes from local Windows dev to a live, non-commercial Vercel deployment — and how it evolves after that. Covers GitHub setup, Vercel dashboards, Supabase two-project flow, environment variables, pre-flight and post-deployment checklists, domains, rollback, backups, and the Phase 5 hosting decision.
 >
 > **Facts rule:** every third-party quota/pricing claim in this file traces to `docs/VERIFIED_FACTS.md` and is cited as such. Anything not verified there is marked **UNVERIFIED**. Dates in this file assume the verification date 2026-11-10 recorded in `docs/VERIFIED_FACTS.md`.

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MarkdownLite } from "@/components/blog/markdown-lite";
+import { JsonLd } from "@/components/seo/json-ld";
 
 /*
  * /blog/[slug] — completed MVP slice: a real published article from
@@ -15,6 +16,9 @@ import { MarkdownLite } from "@/components/blog/markdown-lite";
  * per-article metadata, never a shared generic title (SEO_STRATEGY.md §4).
  */
 export const instant = false;
+
+/** Absolute base for JSON-LD item URLs (Google requires absolute URLs). */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 interface PostRow {
   slug: string;
@@ -77,6 +81,22 @@ export default async function BlogPostPage({
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Blog",
+              item: `${siteUrl}/blog`,
+            },
+            { "@type": "ListItem", position: 3, name: post.title },
+          ],
+        }}
+      />
       <nav aria-label="Breadcrumb" className="text-foreground-muted text-xs">
         <Link href="/" className="hover:text-foreground underline">
           Home

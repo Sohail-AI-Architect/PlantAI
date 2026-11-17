@@ -1,0 +1,74 @@
+/**
+ * Sign-in error/message contracts (auth hardening F1–F5).
+ *
+ * Pure, framework-free module so the contracts are unit-testable offline
+ * (tests/login-form-fixes.test.ts) without mounting Next.js client
+ * components — same pattern as the camera error taxonomy
+ * (src/components/identify/camera/plant-camera.tsx).
+ *
+ * PRIVACY STANDARD (UI_UX_DESIGN.md §6.6, preserved verbatim): messages
+ * must never reveal whether an account exists. GoTrue's
+ * `invalid_credentials` covers wrong password / unknown email / a username
+ * typed into the email field — the app deliberately cannot distinguish
+ * them. The rate-limit branch below is the ONE exception, and it is safe:
+ * 429 `over_email_send_rate_limit` reflects the PROJECT's hourly email
+ * budget (Supabase built-in sender = 2 emails/hour), not the existence of
+ * any particular account.
+ */
+
+/** Email shape check — the SAME regex as signup-form and forgot-password-form. */
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
+
+export function isValidEmail(raw: string): boolean {
+  return EMAIL_PATTERN.test(raw);
+}
+
+/**
+ * Password sign-in: ALL failures map to this one generic message, by design.
+ * Kept as a single exported constant so tests can pin the exact wording.
+ */
+export const PASSWORD_SIGN_IN_ERROR_MESSAGE =
+  "Couldn't sign in. Check your email and password — if you just signed up, confirm your email first (the link may be in your inbox).";
+
+/**
+ * GoTrue error codes that mean "the project's hourly email budget is spent".
+ * `over_email_send_rate_limit` = built-in email cap (429);
+ * `over_request_rate_limit` = general endpoint throttle (429).
+ * AuthApiError exposes these on `.code` (@supabase/auth-js errors.d.ts).
+ */
+const RATE_LIMIT_CODES: ReadonlySet<string> = new Set([
+  "over_email_send_rate_limit",
+  "over_request_rate_limit",
+]);
+
+export function isRateLimitError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && RATE_LIMIT_CODES.has(code);
+}
+
+/**
+ * Magic-link (signInWithOtp) failure mapping. Never distinguishes
+ * known/unknown addresses (an unknown address yields GoTrue's 422
+ * `otp_disabled` when `shouldCreateUser: false` — mapped to the SAME
+ * generic message as every other non-rate-limit failure).
+ */
+export function magicLinkErrorMessage(error: unknown): string {
+  return isRateLimitError(error)
+    ? "Couldn't send a sign-in link — too many sign-in emails have been requested this hour. Please wait a little and try again."
+    : "Couldn't send a sign-in link — check the address and try again.";
+}
+
+/**
+ * Resend-confirmation failure mapping. Both branches are existence-neutral:
+ * the success path shows the same line regardless of whether the address
+ * has an account (identical to the forgot-password pattern).
+ */
+export function resendConfirmationErrorMessage(error: unknown): string {
+  return isRateLimitError(error)
+    ? "Couldn't send a confirmation email — too many emails have been requested this hour. Please wait a little and try again."
+    : "Couldn't send a confirmation email right now — please try again later.";
+}
+
+/** Success line for a resend attempt — shown regardless of account state. */
+export const RESEND_CONFIRMATION_SENT_MESSAGE =
+  "If that address still needs confirming, a new confirmation email is on its way.";

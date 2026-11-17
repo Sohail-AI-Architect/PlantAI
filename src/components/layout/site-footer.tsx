@@ -27,6 +27,17 @@ const LEGAL_LINKS = [
   { href: "/cookie-policy", label: "Cookie Policy" },
 ] as const;
 
+/*
+ * Cross-link to the companion Blogger publication (Stage 2B integration).
+ * External and non-routable on purpose: `rel="noopener noreferrer"` on a
+ * plain <a>, never next/link. Blogger links back to the live app URL in
+ * its article CTAs (see the growth report for the reciprocal strategy).
+ */
+const GARDEN_GUIDE = {
+  href: "https://plantai-garden-guide.blogspot.com/",
+  label: "PlantAI Garden Guide",
+} as const;
+
 export function SiteFooter() {
   return (
     <footer className="border-border-muted bg-surface mt-12 border-t">
@@ -47,6 +58,18 @@ export function SiteFooter() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <a
+                  href={GARDEN_GUIDE.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-foreground-muted hover:text-brand-700 text-sm transition-colors"
+                >
+                  {GARDEN_GUIDE.label}{" "}
+                  <span aria-hidden="true">↗</span>
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              </li>
             </ul>
           </nav>
         </div>

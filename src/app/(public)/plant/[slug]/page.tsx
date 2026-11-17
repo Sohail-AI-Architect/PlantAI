@@ -28,6 +28,9 @@ import { getPlantImageAsset } from "@/lib/plant-images";
  */
 export const instant = false;
 
+/** Absolute base for JSON-LD item URLs (Google requires absolute URLs). */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 interface PlantRow {
   id: string;
   slug: string;
@@ -147,8 +150,13 @@ export default async function PlantDetailPage({
           "@context": "https://schema.org",
           "@type": "BreadcrumbList",
           itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Home", item: "/" },
-            { "@type": "ListItem", position: 2, name: "Plant library", item: "/library" },
+            { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Plant library",
+              item: `${siteUrl}/library`,
+            },
             { "@type": "ListItem", position: 3, name: p.scientific_name },
           ],
         }}
