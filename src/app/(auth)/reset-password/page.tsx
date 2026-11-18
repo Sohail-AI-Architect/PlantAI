@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 
@@ -7,10 +8,15 @@ export const metadata: Metadata = {
 };
 
 /*
- * /reset-password — Phase 2 auth (FR-AUTH-006). Reached only after
- * /auth/confirm verified the recovery token (session established in the
- * cookie). Not in the proxy's guest-only list: a signed-in visitor may also
- * reach it, which is harmless — updateUser requires a session either way.
+ * /reset-password — Phase 2 auth (FR-AUTH-006, hardened by F8). Reached
+ * two safe ways: (1) /auth/confirm verified a token_hash recovery link
+ * server-side (session cookie present), or (2) the PKCE recovery email
+ * links DIRECTLY here with a one-time `?code=`, which ResetPasswordForm
+ * exchanges client-side (the code verifier lives in this browser).
+ * Suspense: the form reads `?code` search params at runtime (Next.js 16
+ * Cache Components), mirroring the /login page pattern. Not in the
+ * proxy's guest-only list: a signed-in visitor may also reach it, which
+ * is harmless — updateUser requires a session either way.
  */
 export default function ResetPasswordPage() {
   return (
@@ -20,7 +26,9 @@ export default function ResetPasswordPage() {
         <p className="text-foreground-muted mt-1 text-sm">
           Choose a new password of at least 8 characters.
         </p>
-        <ResetPasswordForm />
+        <Suspense fallback={<div className="text-foreground-muted mt-6 text-sm">Loading…</div>}>
+          <ResetPasswordForm />
+        </Suspense>
       </div>
     </section>
   );

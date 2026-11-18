@@ -17,6 +17,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
  *   make client-side role injection impossible (SECURITY.md §8).
  * - Email confirmation is required: the response session is null until the
  *   owner clicks the emailed link (Supabase confirm-signup setting).
+ * - F9 (Phase 6 report): the confirmation email lands on /auth/link. The
+ *   browser client is PKCE by default, so the emailed link is
+ *   `{emailRedirectTo}?code=…` and must be exchanged client-side by the
+ *   browser that requested it. A token_hash-style template still routes to
+ *   the server-side /auth/confirm route untouched.
  */
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,24}$/;
@@ -74,7 +79,10 @@ export function SignupForm() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          // F9: PKCE confirmation link → the client-side exchange page.
+          // (Default templates use {{ .ConfirmationURL }}, which carries a
+          // one-time `code`; /auth/confirm cannot consume those.)
+          emailRedirectTo: `${window.location.origin}/auth/link`,
           data: { username: username.trim() },
         },
       });
@@ -110,7 +118,8 @@ export function SignupForm() {
           <p className="font-semibold">Confirm your email</p>
           <p className="mt-1">
             We sent a confirmation link to <strong>{email.trim()}</strong>. Open
-            it on this device to activate your account, then sign in.
+            it on this device to activate your account — we&apos;ll sign you in
+            automatically.
           </p>
         </div>
         <Link

@@ -9,6 +9,16 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
  * Forgot-password form (FR-AUTH-006). Always shows the same neutral success
  * message whether or not the email exists (privacy standard — UI_UX_DESIGN
  * §6.6: never reveal account existence).
+ *
+ * F8 (Phase 5): the reset email's redirect target is the /reset-password
+ * PAGE itself. The browser Supabase client uses the PKCE auth flow
+ * (@supabase/ssr default), so GoTrue turns the emailed link into
+ * `{redirectTo}?code=…`, and the one-time code can ONLY be exchanged by the
+ * browser client that holds the matching code_verifier (stored locally at
+ * request time). Pointing redirectTo at /auth/confirm was therefore broken:
+ * that Route Handler only understands token_hash links, so every recovery
+ * click bounced to /login?error=link (the exact production incident). The
+ * token_hash-style callback remains in /auth/confirm for sign-up links.
  */
 export function ForgotPasswordForm() {
   const searchParams = useSearchParams();
@@ -33,7 +43,11 @@ export function ForgotPasswordForm() {
       const supabase = createSupabaseBrowserClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
-        { redirectTo: `${window.location.origin}/auth/confirm?type=recovery` }
+        // F8: link lands DIRECTLY on the reset-password page, where the
+        // PKCE one-time `?code=` is exchanged client-side (the code
+        // verifier lives in THIS browser's storage). Never /auth/confirm —
+        // that route only handles token_hash-style links.
+        { redirectTo: `${window.location.origin}/reset-password` }
       );
       if (resetError) {
         setError("Couldn't send the reset email — check the address and try again.");

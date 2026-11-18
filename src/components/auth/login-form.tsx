@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  PASSWORD_SIGN_IN_ERROR_MESSAGE,
+  PASSWORD_UPDATED_MESSAGE,
   RESEND_CONFIRMATION_SENT_MESSAGE,
   isValidEmail,
   magicLinkErrorMessage,
+  passwordSignInErrorMessage,
   resendConfirmationErrorMessage,
 } from "@/lib/auth/login-messages";
 
@@ -38,6 +39,24 @@ import {
  *   (built-in sender = 2 emails/hour, project-wide) gets an honest
  *   wait-and-retry message; all other OTP failures keep the generic,
  *   account-existence-neutral message.
+ * - F6/F7 (Phase 4 root-cause report): the PASSWORD path now also handles
+ *   the endpoint throttle (429 `over_request_rate_limit`) honestly, and the
+ *   resend success line states GoTrue's designed no-op for
+ *   already-confirmed addresses truthfully (no email is sent for those —
+ *   proven from supabase/auth internal/api/resend.go), so "no email
+ *   arrived" is no longer misread as a failure.
+ * - F8 (Phase 5 recovery-callback report): PASSWORD RECOVERY now uses the
+ *   correct PKCE flow end-to-end — the reset link goes directly to
+ *   /reset-password, which exchanges the one-time `?code=` CLIENT-SIDE
+ *   (the code_verifier lives in this browser's storage, so no server-side
+ *   exchange is possible), then the password update runs on the recovery
+ *   session and lands on /login?reset=1. The token_hash callback route
+ *   (/auth/confirm) is untouched for sign-up confirmations.
+ * - F9 (Phase 6 report): MAGIC LINK and RESEND-CONFIRMATION emails now land
+ *   on /auth/link, a client-capable page that exchanges the PKCE `?code=`
+ *   exactly once (same structural reason as F8: the code_verifier lives in
+ *   this browser). Pointing `emailRedirectTo` at /auth/confirm could never
+ *   work for PKCE links — that route only understands token_hash.
  */
 
 function safeNextPath(raw: string | null): string {
@@ -55,10 +74,14 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [info, setInfo] = useState<string | null>(
-    // Post-email-confirmation landing (auth/confirm redirects here).
-    searchParams.get("confirmed") === "1"
-      ? "Email confirmed — you can sign in now."
-      : null
+    searchParams.get("reset") === "1"
+      ? // F8: post-password-reset landing (reset-password form redirects
+        // here only after a SUCCESSFUL update).
+        PASSWORD_UPDATED_MESSAGE
+      : searchParams.get("confirmed") === "1"
+        ? // Post-email-confirmation landing (auth/confirm redirects here).
+          "Email confirmed — you can sign in now."
+        : null
   );
   // F1: an emailed confirmation/recovery link that arrived expired, already
   // used, or tampered lands here as /login?error=link (auth/confirm route).
@@ -91,9 +114,11 @@ export function LoginForm() {
         password,
       });
       if (signInError) {
-        // Deliberately vague (privacy standard): invalid credentials vs
-        // unconfirmed email are indistinguishable to the caller.
-        setError(PASSWORD_SIGN_IN_ERROR_MESSAGE);
+        // Deliberately vague for credential failures (privacy standard):
+        // invalid credentials vs unconfirmed email are indistinguishable to
+        // the caller. F6: the endpoint throttle (429) gets an honest
+        // wait-and-retry message instead of misleading credential advice.
+        setError(passwordSignInErrorMessage(signInError));
         setSignInFailed(true); // F3/F4 recovery affordances
         return;
       }
@@ -121,7 +146,11 @@ export function LoginForm() {
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          // F9: the emailed PKCE link is `{redirectTo}?code=…`; only the
+          // browser that requested it holds the code_verifier, so it must
+          // land on the client-side exchange page (/auth/link), never the
+          // token_hash-only /auth/confirm route.
+          emailRedirectTo: `${window.location.origin}/auth/link`,
           // F5: sign-in ONLY — never implicitly create an account for a
           // mistyped address (the login page is not a signup surface).
           shouldCreateUser: false,
@@ -159,7 +188,10 @@ export function LoginForm() {
       const { error: resendError } = await supabase.auth.resend({
         type: "signup",
         email: email.trim(),
-        options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+        // F9: `resend` also sends a PKCE code_challenge under the ssr
+        // client's default flow, so its link needs the client-side
+        // exchange page too (verified in @supabase/auth-js GoTrueClient).
+        options: { emailRedirectTo: `${window.location.origin}/auth/link` },
       });
       if (resendError) {
         setError(resendConfirmationErrorMessage(resendError));

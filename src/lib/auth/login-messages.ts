@@ -47,6 +47,21 @@ export function isRateLimitError(error: unknown): boolean {
 }
 
 /**
+ * Password sign-in error mapping (F6). ALL non-rate-limit failures map to
+ * the one generic message, by design (privacy standard). The ONE exception
+ * is the endpoint throttle (429 `over_request_rate_limit` after repeated
+ * attempts): throttle state is project/IP state, not account state, so an
+ * honest "wait and retry" message leaks nothing and stops telling a
+ * throttled user to double-check credentials they cannot change by
+ * retyping. Kept as a function so the two branches are unit-testable.
+ */
+export function passwordSignInErrorMessage(error: unknown): string {
+  return isRateLimitError(error)
+    ? "Couldn't sign in — too many sign-in attempts have been made recently. Please wait a little and try again."
+    : PASSWORD_SIGN_IN_ERROR_MESSAGE;
+}
+
+/**
  * Magic-link (signInWithOtp) failure mapping. Never distinguishes
  * known/unknown addresses (an unknown address yields GoTrue's 422
  * `otp_disabled` when `shouldCreateUser: false` — mapped to the SAME
@@ -69,6 +84,45 @@ export function resendConfirmationErrorMessage(error: unknown): string {
     : "Couldn't send a confirmation email right now — please try again later.";
 }
 
-/** Success line for a resend attempt — shown regardless of account state. */
+/**
+ * Success line for a resend attempt — shown regardless of account state,
+ * and HONEST about GoTrue's designed behavior (proven from
+ * supabase/auth internal/api/resend.go): /resend silently no-ops (200, no
+ * email) for already-confirmed AND nonexistent addresses, so "no email
+ * arrived" does NOT mean the request failed. One neutral line covers both
+ * realities without asserting which one applies.
+ */
 export const RESEND_CONFIRMATION_SENT_MESSAGE =
-  "If that address still needs confirming, a new confirmation email is on its way.";
+  "Request received — if that address still needs confirming, a new confirmation email is on its way. If it's already confirmed, you can simply sign in below.";
+
+/**
+ * Post-reset sign-in landing message (/login?reset=1). Only shown after a
+ * SUCCESSFUL password update (F8: replaces the previous off-label reuse of
+ * ?confirmed=1, which told a password-reset user "Email confirmed").
+ */
+export const PASSWORD_UPDATED_MESSAGE =
+  "Password updated — sign in with your new password.";
+
+/**
+ * Recovery-link exchange failure mapping (F8). GoTrue's one-time links
+ * fail with the same error shape whether the token is invalid, expired,
+ * or ALREADY USED (e.g. consumed by an email scanner's prefetch or a
+ * double click) — the app keeps them indistinguishable (same neutrality
+ * rule as every auth error) and points the user to request a fresh link.
+ */
+export function recoveryLinkErrorMessage(_error?: unknown): string {
+  void _error;
+  return "That password reset link is invalid or has expired — request a fresh one from the forgot-password page.";
+}
+
+/**
+ * Magic-link / sign-up-confirmation / resend-confirmation exchange failure
+ * mapping (F9). Identical neutrality contract to the recovery message: an
+ * invalid, expired, or already-consumed one-time code produces ONE message,
+ * with a path back to the sign-in page (which offers both a fresh magic
+ * link and a fresh confirmation resend). Never reveals account state.
+ */
+export function authLinkErrorMessage(_error?: unknown): string {
+  void _error;
+  return "That sign-in or confirmation link is invalid or has expired — request a new one from the sign-in page.";
+}

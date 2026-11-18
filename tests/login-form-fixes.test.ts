@@ -7,6 +7,7 @@ import {
   isValidEmail,
   isRateLimitError,
   magicLinkErrorMessage,
+  passwordSignInErrorMessage,
   resendConfirmationErrorMessage,
 } from "@/lib/auth/login-messages";
 
@@ -119,9 +120,46 @@ describe("resendConfirmationErrorMessage (F3) — neutral in every branch", () =
     }
   });
 
-  it("success line is identical regardless of account state (no conditional wording)", () => {
-    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/^If that address/);
+  it("success line is unconditional AND honest about GoTrue's confirmed-user no-op (F7)", () => {
+    // GoTrue /resend silently no-ops (200, no email) for already-confirmed
+    // addresses (supabase/auth internal/api/resend.go) — the message must
+    // state both realities neutrally instead of promising an email that
+    // will never come for confirmed accounts.
+    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/^Request received/);
+    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/still needs confirming/i);
+    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/already confirmed/i);
+    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/simply sign in/i);
     expect(RESEND_CONFIRMATION_SENT_MESSAGE).not.toMatch(/account (exists|created)/i);
+  });
+});
+
+describe("passwordSignInErrorMessage (F6) — throttle-aware, otherwise one generic message", () => {
+  it("endpoint throttle (429) → HONEST wait-and-retry guidance, no credential advice", () => {
+    for (const code of ["over_request_rate_limit", "over_email_send_rate_limit"]) {
+      const message = passwordSignInErrorMessage({ code });
+      expect(message).toMatch(/too many sign-in attempts/i);
+      expect(message).toMatch(/wait/i);
+      expect(message).not.toMatch(/check your email and password/i);
+    }
+  });
+
+  it("every OTHER failure → the SAME generic message (incl. invalid_credentials, email_not_confirmed)", () => {
+    for (const err of [
+      { code: "invalid_credentials" },
+      { code: "email_not_confirmed" },
+      new Error("fetch failed"),
+      null,
+      undefined,
+    ]) {
+      expect(passwordSignInErrorMessage(err)).toBe(PASSWORD_SIGN_IN_ERROR_MESSAGE);
+    }
+  });
+
+  it("never reveals whether the address has an account (throttle state ≠ account state)", () => {
+    for (const err of [{ code: "over_request_rate_limit" }, { code: "invalid_credentials" }]) {
+      const message = passwordSignInErrorMessage(err);
+      expect(message).not.toMatch(/not (registered|found|exist)|no account/i);
+    }
   });
 });
 
@@ -146,11 +184,14 @@ describe("login-form source contracts (F1–F5 wiring)", () => {
     expect(src).toMatch(/isValidEmail\(email\.trim\(\)\)/g);
   });
 
-  it("F3: resend uses type 'signup' with the same-origin /auth/confirm redirect", () => {
+  it("F3/F9: resend uses type 'signup' with the same-origin /auth/link (PKCE) redirect", () => {
     const src = formSource();
     expect(src).toMatch(/auth\.resend\(\{[\s\S]*?type:\s*"signup"/);
+    // F9: `resend` also sends a PKCE code_challenge, so its emailed link
+    // must reach the client-side exchange page, not the token_hash-only
+    // /auth/confirm route.
     expect(src).toMatch(
-      /auth\.resend\(\{[\s\S]*?emailRedirectTo:\s*`\$\{window\.location\.origin\}\/auth\/confirm`/
+      /auth\.resend\(\{[\s\S]*?emailRedirectTo:\s*`\$\{window\.location\.origin\}\/auth\/link`/
     );
   });
 
@@ -168,9 +209,10 @@ describe("login-form source contracts (F1–F5 wiring)", () => {
     expect(formSource()).toMatch(/sign in without a password/);
   });
 
-  it("password failures still map to the ONE generic message (privacy standard unchanged)", () => {
-    expect(formSource()).toMatch(/setError\(PASSWORD_SIGN_IN_ERROR_MESSAGE\)/);
-    // No per-error-code branching was added to the password path:
-    expect(formSource()).not.toMatch(/signInError\.code/);
+  it("password failures map through passwordSignInErrorMessage (F6: throttle-aware)", () => {
+    expect(formSource()).toMatch(/setError\(passwordSignInErrorMessage\(signInError\)\)/);
+    // The ONLY password-path branching is the throttle branch — no
+    // credential-state branching (privacy standard preserved):
+    expect(formSource()).not.toMatch(/signInError\.code === |email_not_confirmed/);
   });
 });
