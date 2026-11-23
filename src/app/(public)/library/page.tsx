@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { PlantImage } from "@/components/plants/plant-image";
+import { CareBasicsLink } from "@/components/home/care-basics-link";
 import { getPlantImageAsset } from "@/lib/plant-images";
 
 export const metadata: Metadata = {
@@ -92,9 +93,9 @@ export default async function LibraryPage({
         Practical care guides written by people, not scraped: how much water
         and light each plant needs, what soil it likes, and how to feed it. New
         to houseplants? Start with the{" "}
-        <Link href="/#care-basics" className="underline hover:text-foreground">
+        <CareBasicsLink className="underline hover:text-foreground">
           indoor plant care basics
-        </Link>{" "}
+        </CareBasicsLink>{" "}
         on the home page.
       </p>
 

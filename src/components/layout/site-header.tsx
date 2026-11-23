@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AuthNav } from "@/components/auth/auth-nav";
+import { CareBasicsLink } from "@/components/home/care-basics-link";
 
 /*
  * Global header — Phase 2 update (UI_UX_DESIGN.md §5 navigation).
@@ -45,12 +46,18 @@ export function SiteHeader() {
             <ul className="flex items-center gap-1 sm:gap-3">
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="hover:bg-brand-50 hover:text-brand-800 rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                  >
-                    {link.label}
-                  </Link>
+                  {link.href === "/#care-basics" ? (
+                    <CareBasicsLink className="hover:bg-brand-50 hover:text-brand-800 rounded-md px-3 py-2 text-sm font-medium transition-colors">
+                      {link.label}
+                    </CareBasicsLink>
+                  ) : (
+                    <Link
+                      href={link.href}
+                      className="hover:bg-brand-50 hover:text-brand-800 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
