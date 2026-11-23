@@ -90,7 +90,12 @@ export default async function LibraryPage({
       <h1 className="text-3xl font-bold tracking-tight">Plant library</h1>
       <p className="text-foreground-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Practical care guides written by people, not scraped: how much water
-        and light each plant needs, what soil it likes, and how to feed it.
+        and light each plant needs, what soil it likes, and how to feed it. New
+        to houseplants? Start with the{" "}
+        <Link href="/#care-basics" className="underline hover:text-foreground">
+          indoor plant care basics
+        </Link>{" "}
+        on the home page.
       </p>
 
       <form

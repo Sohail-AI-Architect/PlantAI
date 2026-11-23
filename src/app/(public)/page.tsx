@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PlantImage } from "@/components/plants/plant-image";
+import { CareBasics } from "@/components/home/care-basics";
 import { HERO_IMAGE, PLANT_LIBRARY_IMAGES } from "@/lib/plant-images";
 
 /*
@@ -168,6 +169,8 @@ export default function HomePage() {
           ))}
         </ul>
       </section>
+
+      <CareBasics />
     </div>
   );
 }
