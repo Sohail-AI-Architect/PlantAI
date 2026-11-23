@@ -74,9 +74,12 @@ export function SiteFooter() {
           </nav>
         </div>
         <p className="mt-4 text-foreground-muted text-xs">
-          © 2026 PlantAI. Plant identification and care
-          information is provided for educational purposes. In development —
-          features ship phase by phase.
+          © 2026 PlantAI. Owned and operated by Sohail Nawaz. All rights
+          reserved.
+        </p>
+        <p className="text-foreground-muted mt-1 text-xs">
+          Plant identification and care information is provided for
+          educational purposes.
         </p>
       </div>
     </footer>

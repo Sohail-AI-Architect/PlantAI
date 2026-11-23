@@ -36,9 +36,15 @@ export async function AuthNav() {
     <div className="flex items-center gap-2">
       <Link
         href="/dashboard"
-        className="hover:bg-brand-50 hover:text-brand-800 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+        title={`Signed in as ${auth.displayName ?? auth.email ?? "your account"}`}
+        className="hover:bg-brand-50 hover:text-brand-800 flex max-w-[11rem] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors"
       >
-        Dashboard
+        <span className="truncate">{auth.displayName ?? auth.email}</span>
+        {auth.isAnonymous && (
+          <span className="bg-brand-100 text-brand-800 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+            Demo
+          </span>
+        )}
       </Link>
       <SignOutButton />
     </div>

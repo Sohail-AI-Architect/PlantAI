@@ -106,11 +106,13 @@ export default function AboutPage() {
 
       <h2>Who we are</h2>
       <p>
-        PlantAI is built and maintained by a small, independent team of plant
-        enthusiasts and web developers. We are not a nursery, a botanical
-        institution or a medical provider, and we do not claim credentials we
-        do not have. What we do offer is a genuine effort to make plant
-        knowledge more accessible, with clear sourcing and honest limitations.
+        PlantAI is owned and created by <strong>Sohail Nawaz</strong>, who
+        builds and maintains the site together with a small, independent team
+        of plant enthusiasts and web developers. We are not a nursery, a
+        botanical institution or a medical provider, and we do not claim
+        credentials we do not have. What we do offer is a genuine effort to
+        make plant knowledge more accessible, with clear sourcing and honest
+        limitations.
       </p>
 
       <h2>How the project is funded</h2>

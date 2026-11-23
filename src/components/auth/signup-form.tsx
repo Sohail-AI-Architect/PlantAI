@@ -143,7 +143,7 @@ export function SignupForm() {
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
           <label htmlFor="username" className="block text-sm font-medium">
-            Username
+            Your name (username)
           </label>
           <input
             id="username"
@@ -160,8 +160,8 @@ export function SignupForm() {
             className="border-border-muted focus:border-brand-600 mt-1 block w-full rounded-md border px-3 py-2 text-sm"
           />
           <p id="username-hint" className="text-foreground-muted mt-1 text-xs">
-            3–24 characters; letters, numbers and underscores. This is your
-            public handle.
+            3–24 characters; letters, numbers and underscores. This is the
+            name shown in the navigation bar.
           </p>
           {fieldErrors.username && (
             <p id="username-error" className="text-error mt-1 text-xs">

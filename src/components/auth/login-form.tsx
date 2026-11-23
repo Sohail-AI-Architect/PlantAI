@@ -204,6 +204,41 @@ export function LoginForm() {
     }
   }
 
+  // 1-click demo: Supabase anonymous sign-in creates a real, RLS-bounded
+  // session with no email/password, so reviewers can test the logged-in
+  // features immediately. The username metadata satisfies the profile
+  // trigger (which requires a non-null username).
+  async function handleDemoSignIn() {
+    setError(null);
+    setInfo(null);
+    setBusy(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const suffix = (
+        globalThis.crypto?.randomUUID?.() ?? String(Date.now())
+      )
+        .replace(/-/g, "")
+        .slice(0, 8);
+      const { error: demoError } = await supabase.auth.signInAnonymously({
+        options: {
+          data: { username: `demo_${suffix}`, full_name: "Demo Guest" },
+        },
+      });
+      if (demoError) {
+        setError(
+          "Demo sign-in is unavailable right now. Please create a free account instead."
+        );
+        return;
+      }
+      router.replace(nextPath);
+      router.refresh();
+    } catch {
+      setError("Unexpected error — demo sign-in failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (magicLinkSent) {
     return (
       <div className="mt-6" aria-live="polite">
@@ -229,6 +264,31 @@ export function LoginForm() {
           {error}
         </p>
       )}
+
+      <div className="border-border-muted bg-surface-muted rounded-lg border p-4">
+        <p className="text-sm font-semibold">Just exploring PlantAI?</p>
+        <p className="text-foreground-muted mt-1 text-sm leading-relaxed">
+          Open a temporary demo session instantly — no email, password or
+          signup needed. It works for the signed-in features and clears when
+          you sign out.
+        </p>
+        <button
+          type="button"
+          onClick={handleDemoSignIn}
+          disabled={busy}
+          className="border-brand-600 text-brand-700 hover:bg-brand-50 mt-3 w-full rounded-md border bg-white px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60"
+        >
+          {busy ? "Opening demo…" : "Try Demo Account"}
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <span className="bg-border-muted h-px flex-1" />
+        <span className="text-foreground-muted text-xs font-medium uppercase tracking-wide">
+          or sign in
+        </span>
+        <span className="bg-border-muted h-px flex-1" />
+      </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>

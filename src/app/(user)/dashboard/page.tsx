@@ -24,13 +24,15 @@ export const metadata: Metadata = {
 
 interface Overview {
   email: string | null;
+  displayName: string | null;
   savedCount: number | null;
   failed: boolean;
 }
 
 async function loadOverview(): Promise<Overview> {
   const auth = await getAuthContext();
-  if (!auth.userId) return { email: null, savedCount: null, failed: false };
+  if (!auth.userId)
+    return { email: null, displayName: null, savedCount: null, failed: false };
 
   const supabase = await createSupabaseServerClient();
   const { count, error } = await supabase
@@ -40,9 +42,19 @@ async function loadOverview(): Promise<Overview> {
 
   if (error) {
     console.error(`[dashboard] saved count failed (${error.code})`);
-    return { email: auth.email, savedCount: null, failed: true };
+    return {
+      email: auth.email,
+      displayName: auth.displayName,
+      savedCount: null,
+      failed: true,
+    };
   }
-  return { email: auth.email, savedCount: count ?? 0, failed: false };
+  return {
+    email: auth.email,
+    displayName: auth.displayName,
+    savedCount: count ?? 0,
+    failed: false,
+  };
 }
 
 function StatCard({
@@ -63,13 +75,17 @@ function StatCard({
 }
 
 async function DashboardContent() {
-  const { email, savedCount, failed } = await loadOverview();
+  const { email, displayName, savedCount, failed } = await loadOverview();
   const persistenceOn = isIdentificationPersistenceEnabled();
 
   return (
     <div>
       <p className="text-foreground-muted text-sm">
-        {email ? <>Signed in as {email}</> : "Your PlantAI overview"}
+        {displayName || email ? (
+          <>Signed in as {displayName ?? email}</>
+        ) : (
+          "Your PlantAI overview"
+        )}
       </p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">

@@ -36,8 +36,21 @@ async function AccountContent() {
       <section className="border-border-muted bg-surface rounded-xl border p-5">
         <h2 className="text-sm font-semibold">Account</h2>
         <p className="text-foreground-muted mt-2 text-sm">
-          Signed in as <span className="font-medium">{auth.email}</span>
+          Signed in as{" "}
+          <span className="text-foreground font-medium">
+            {auth.displayName ?? auth.email}
+          </span>
         </p>
+        {auth.email ? (
+          <p className="text-foreground-muted mt-1 text-xs">{auth.email}</p>
+        ) : null}
+        {auth.isAnonymous && (
+          <p className="text-foreground-muted mt-2 text-xs">
+            This is a temporary demo account. Saved items are visible only in
+            this browser session and the account is not tied to an email
+            address.
+          </p>
+        )}
         <div className="mt-4">
           <SignOutButton />
         </div>
