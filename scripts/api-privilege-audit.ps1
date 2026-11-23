@@ -6,13 +6,13 @@
 #           public tables, so the least-privilege GRANT plan can be
 #           confirmed before anything is granted or exposed.
 # Run by  : the OWNER, one line:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\api-privilege-audit.ps1"
+#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\api-privilege-audit.ps1"
 # Security: same masked-password pattern as previous scripts.
 # Read-only: every statement is SELECT. NO GRANT/REVOKE/DDL/DML.
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 
 $ref = (Get-Content (Join-Path $projectRoot 'supabase\.temp\project-ref') -Raw).Trim()

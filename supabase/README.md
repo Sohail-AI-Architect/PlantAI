@@ -20,7 +20,7 @@ DATABASE_SCHEMA.md._
 ## Option A — Supabase CLI (preferred)
 
 ```powershell
-# from C:\Users\welsohail\PlantAI
+# from C:\Users\supersohail\PlantAI
 npx supabase init            # only once; creates supabase/config.toml if missing
 npx supabase login           # opens browser; use the account that owns plantai-dev
 npx supabase link --project-ref <PROJECT_REF>   # ref from the dashboard URL

@@ -10,13 +10,13 @@
 #             - RLS enabled + forced on all 10 tables
 #             - rolbypassrls facts
 # Run by  : the OWNER, one line (AFTER the SQL block is applied):
-#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\api-grant-verify.ps1"
+#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\api-grant-verify.ps1"
 # Security: same masked-password pattern as previous scripts.
 # Read-only: every statement is SELECT. NO GRANT/REVOKE/DDL/DML.
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 
 $ref = (Get-Content (Join-Path $projectRoot 'supabase\.temp\project-ref') -Raw).Trim()

@@ -222,7 +222,7 @@ Canonical decision (`CAPACITOR...` note — ignore — canonical decisions in th
 **Option B — CLI (better as soon as flows are repeatable):**
 
 ```powershell
-cd C:\Users\welsohail\PlantAI
+cd C:\Users\supersohail\PlantAI
 npx supabase login
 
 # link to prod project (get ref from dashboard URL: https://supabase.com/dashboard/project/<ref>)
@@ -424,7 +424,7 @@ Record each month's numbers in a short `CHANGELOG.md` line (e.g. "2026-12-01 —
 
 ## 14. Quick reference: canonical commands
 
-PowerShell, from `C:\Users\welsohail\PlantAI`:
+PowerShell, from `C:\Users\supersohail\PlantAI`:
 
 ```powershell
 # --- Local sanity pre-push (§3, §7) ---

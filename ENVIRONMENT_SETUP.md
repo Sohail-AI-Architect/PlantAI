@@ -90,12 +90,12 @@ git --version
 4. Clone locally:
 
 ```powershell
-cd C:\Users\welsohail
+cd C:\Users\supersohail
 git clone https://github.com/<your-username>/PlantAI.git
 cd PlantAI
 ```
 
-> Note: the repo has been cloned next to the working docs folder; if docs were written before cloning, move them into the clone before committing (the current working directory `C:\Users\welsohail\PlantAI` should BE the clone root).
+> Note: the repo has been cloned next to the working docs folder; if docs were written before cloning, move them into the clone before committing (the current working directory `C:\Users\supersohail\PlantAI` should BE the clone root).
 
 ### 2.4 VS Code
 
@@ -241,7 +241,7 @@ A committed `.env.example` with placeholder values lives inside the repo; no rea
 
 ## 6. OpenCode usage
 
-- Open OpenCode with the **repo root** as working directory (i.e. `C:\Users\welsohail\PlantAI` once the git clone is there), so file references are stable.
+- Open OpenCode with the **repo root** as working directory (i.e. `C:\Users\supersohail\PlantAI` once the git clone is there), so file references are stable.
 - **Phase 0 = docs only.** This phase produces planning documents; OpenCode sessions may write to `/docs`, `/ARCHITECTURE.md`, `/SECURITY.md`, `/TESTING_PLAN.md`, `/REQUIREMENTS.md`, etc., but NOT initialize the Next.js app.
 - Phase planning and task sequencing live in [`TASKS.md`](TASKS.md) — do not duplicate phase lists here.
 - Model/provider choice is up to the user (OpenCode is provider-agnostic; costs depend on the LLM provider you pick — no project budget assumption, per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)).

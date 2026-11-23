@@ -5,9 +5,9 @@
 #           against the linked remote project plantai-dev.
 # Run by  : the OWNER, one line per phase:
 #   Dry-run (no changes):
-#     powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\supabase-migrate.ps1" -Phase dryrun
+#     powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\supabase-migrate.ps1" -Phase dryrun
 #   Apply (ONLY after the agent has approved the dry-run output):
-#     powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\supabase-migrate.ps1" -Phase push
+#     powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\supabase-migrate.ps1" -Phase push
 # Security: the database password is prompted masked (Read-Host
 #   -AsSecureString), converted via SecureStringToBSTR, held only as a
 #   temporary SUPABASE_DB_PASSWORD process env var, and removed +
@@ -26,7 +26,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 
 Write-Host "== PlantAI migration $Phase ==" -ForegroundColor Cyan

@@ -20,11 +20,11 @@
 # Security: publishable key is read from .env.local and used ONLY in
 #           request headers; it is never printed or echoed.
 # Run by  : the OWNER or the agent (no password needed):
-#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\api-rest-smoke.ps1"
+#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\api-rest-smoke.ps1"
 # =====================================================================
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 

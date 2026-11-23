@@ -8,7 +8,7 @@
 #             2) read-only catalog queries (tables, RLS, functions,
 #                triggers, buckets, seed counts, role properties)
 # Run by  : the OWNER, one line:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\supabase-verify.ps1"
+#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\supabase-verify.ps1"
 # Pooler  : shared Supavisor session pooler, port 5432, database
 #           postgres, and the SCOPED username postgres.<project-ref>
 #           (plain "postgres" is NOT valid on the shared pooler).
@@ -23,7 +23,7 @@
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 
 Write-Host '== PlantAI post-migration READ-ONLY verification (v2) ==' -ForegroundColor Cyan

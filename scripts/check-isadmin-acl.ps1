@@ -5,7 +5,7 @@
 #           public.is_admin() (catalog inspection + a live, rolled-back
 #           anon simulation; resolves R1 from PRE_MIGRATION_SAFETY_REVIEW.md).
 # Run by  : the OWNER, one line:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\welsohail\PlantAI\scripts\check-isadmin-acl.ps1"
+#   powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\supersohail\PlantAI\scripts\check-isadmin-acl.ps1"
 # Security: password prompted masked; passed into the psql container
 #   via docker env passthrough (`-e PGPASSWORD` with no inline value);
 #   removed + zeroed + disposed in finally. No credentials in file.
@@ -15,7 +15,7 @@
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 
 $ref = (Get-Content (Join-Path $projectRoot 'supabase\.temp\project-ref') -Raw).Trim()

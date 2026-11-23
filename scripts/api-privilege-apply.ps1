@@ -22,7 +22,7 @@
 # =====================================================================
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = 'C:\Users\welsohail\PlantAI'
+$projectRoot = 'C:\Users\supersohail\PlantAI'
 Set-Location $projectRoot
 $expectedRef = 'qdcirgpzuwnarwqehtmo'
 $expectedBackupHash = '0BA5F4A5C40876DC90AE031D28EC5148767C20900D1C741100B2583D2157B62D'
