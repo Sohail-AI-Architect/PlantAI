@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { Viewport } from "next";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -45,6 +46,16 @@ export const metadata: Metadata = {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
   /*
+   * Google AdSense ownership verification (publisher ID). This meta tag is
+   * emitted server-side into <head> so AdSense can verify the site without
+   * executing JavaScript. The loader script itself is rendered below with
+   * the `beforeInteractive` strategy and is allow-listed in the CSP
+   * (next.config.ts).
+   */
+  other: {
+    "google-adsense-account": "ca-pub-1562565174804877",
+  },
+  /*
    * Default Open Graph / Twitter card (Stage 2B): every page inherits
    * these; dynamic routes (plant/[slug], blog/[slug]) override title and
    * description per record while sharing the one branded card image
@@ -84,6 +95,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="bg-background text-foreground flex min-h-dvh flex-col">
+        {/*
+         * Google AdSense loader (Auto ads + site verification). `beforeInteractive`
+         * injects it into the server-rendered <head> so the AdSense crawler sees
+         * it in the HTML source; `async` keeps it non-blocking. The matching
+         * origins are allow-listed in the CSP in next.config.ts.
+         */}
+        <Script
+          id="google-adsense"
+          async
+          strategy="beforeInteractive"
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1562565174804877"
+          crossOrigin="anonymous"
+        />
         <SiteHeader />
         <main className="flex-1 pb-20 md:pb-0">{children}</main>
         <SiteFooter />

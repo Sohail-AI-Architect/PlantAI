@@ -16,8 +16,9 @@ import type { NextConfig } from "next";
  *   called server-side only (src/lib/plantnet/live-provider.ts); allowing
  *   it in the browser would widen the client attack surface for nothing.
  * - Report-only rollout: CSP was reviewed against the enforcing values in
- *   docs/SECURITY_HEADERS_PROPOSAL.md §3–5; AdSense-era allowances are a
- *   separate documented Phase 5/6 change.
+ *   docs/SECURITY_HEADERS_PROPOSAL.md §3–5. Google AdSense origins are now
+ *   allow-listed explicitly (script/img/connect/frame) so the ownership
+ *   loader and Auto ads are not blocked; see ADSENSE_*_ORIGINS below.
  */
 
 function supabaseOrigins(): { img: string[]; connect: string[] } {
@@ -44,17 +45,69 @@ function supabaseOrigins(): { img: string[]; connect: string[] } {
 
 const { img: IMG_SRC, connect: CONNECT_SRC } = supabaseOrigins();
 
+/*
+ * Google AdSense origins (monetization). One explicit, reviewable list per
+ * directive rather than broad wildcards:
+ * - script: the adsbygoogle loader + Google ad/consent helpers.
+ * - img/connect: ad rendering beacons and traffic-quality reporting.
+ * - frame: the ad iframes AdSense injects (googleads/tpc).
+ * Publisher ID: ca-pub-1562565174804877 (public identifier, not a secret).
+ */
+const ADSENSE_SCRIPT_ORIGINS = [
+  "https://pagead2.googlesyndication.com",
+  "https://tpc.googlesyndication.com",
+  "https://googleads.g.doubleclick.net",
+  "https://securepubads.g.doubleclick.net",
+  "https://www.google.com",
+  "https://www.gstatic.com",
+  "https://adservice.google.com",
+  "https://partner.googleadservices.com",
+  "https://www.googletagservices.com",
+  "https://ep1.adtrafficquality.google",
+  "https://ep2.adtrafficquality.google",
+];
+
+const ADSENSE_IMG_ORIGINS = [
+  "https://pagead2.googlesyndication.com",
+  "https://tpc.googlesyndication.com",
+  "https://googleads.g.doubleclick.net",
+  "https://www.google.com",
+  "https://www.gstatic.com",
+  "https://ep1.adtrafficquality.google",
+  "https://ep2.adtrafficquality.google",
+];
+
+const ADSENSE_CONNECT_ORIGINS = [
+  "https://pagead2.googlesyndication.com",
+  "https://tpc.googlesyndication.com",
+  "https://googleads.g.doubleclick.net",
+  "https://www.google.com",
+  "https://www.gstatic.com",
+  "https://adservice.google.com",
+  "https://ep1.adtrafficquality.google",
+  "https://ep2.adtrafficquality.google",
+];
+
+const ADSENSE_FRAME_ORIGINS = [
+  "https://googleads.g.doubleclick.net",
+  "https://tpc.googlesyndication.com",
+  "https://www.google.com",
+  "https://www.gstatic.com",
+  "https://ep2.adtrafficquality.google",
+];
+
 const scriptSrc =
   process.env.NODE_ENV === "production"
-    ? "'self' 'unsafe-inline'"
-    : "'self' 'unsafe-inline' 'unsafe-eval'";
+    ? `'self' 'unsafe-inline' ${ADSENSE_SCRIPT_ORIGINS.join(" ")}`
+    : `'self' 'unsafe-inline' 'unsafe-eval' ${ADSENSE_SCRIPT_ORIGINS.join(" ")}`;
 
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src ${IMG_SRC.join(" ")}`,
-  `connect-src ${CONNECT_SRC.join(" ")}`,
+  `img-src ${[...IMG_SRC, ...ADSENSE_IMG_ORIGINS].join(" ")}`,
+  `connect-src ${[...CONNECT_SRC, ...ADSENSE_CONNECT_ORIGINS].join(" ")}`,
+  `frame-src ${ADSENSE_FRAME_ORIGINS.join(" ")}`,
   "font-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",

@@ -14,6 +14,14 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
+/*
+ * Fixed last-modified date for the static routes. Using `new Date()` here
+ * changed on every request and sent Google a fake "fresh content" signal.
+ * Bump this value when the static pages actually change (plant entries keep
+ * their real database `updated_at`).
+ */
+const STATIC_LAST_MODIFIED = new Date("2026-11-23");
+
 const STATIC_ROUTES = [
   { path: "/", priority: 1.0 },
   { path: "/identify", priority: 0.9 },
@@ -29,7 +37,7 @@ const STATIC_ROUTES = [
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
     url: new URL(route.path, siteUrl).toString(),
-    lastModified: new Date(),
+    lastModified: STATIC_LAST_MODIFIED,
     changeFrequency: route.path === "/" ? "weekly" : "monthly",
     priority: route.priority,
   }));
