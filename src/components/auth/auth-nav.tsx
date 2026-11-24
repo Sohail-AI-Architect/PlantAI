@@ -3,12 +3,10 @@ import { getAuthContext } from "@/lib/auth/session";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
 /**
- * Auth-aware header slot (Phase 2 auth, FR-AUTH-008/010). Server component:
- * identity comes from verified claims (getClaims) server-side — the UI
- * never decides session state from client storage alone.
- *
- * Rendered inside a <Suspense> boundary in the header (Cache Components:
- * runtime cookie reads must stream, Next.js 16).
+ * Auth-aware header slot (FR-AUTH-005/008/010). Server component: identity
+ * comes from verified claims server-side, never client storage. The native
+ * <details>/<summary> account menu is keyboard accessible without extra
+ * client JavaScript and exposes Create/Sign in links or account + sign out.
  */
 export async function AuthNav() {
   const auth = await getAuthContext();
@@ -32,21 +30,39 @@ export async function AuthNav() {
     );
   }
 
+  const accountName = auth.displayName ?? auth.email ?? "Your account";
+
   return (
-    <div className="flex items-center gap-2">
-      <Link
-        href="/dashboard"
-        title={`Signed in as ${auth.displayName ?? auth.email ?? "your account"}`}
-        className="hover:bg-brand-50 hover:text-brand-800 flex max-w-[11rem] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+    <details className="relative">
+      <summary
+        aria-label="Account menu"
+        className="hover:bg-brand-50 hover:text-brand-800 flex max-w-[12rem] cursor-pointer items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors"
       >
-        <span className="truncate">{auth.displayName ?? auth.email}</span>
-        {auth.isAnonymous && (
-          <span className="bg-brand-100 text-brand-800 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-            Demo
-          </span>
-        )}
-      </Link>
-      <SignOutButton />
-    </div>
+        <span className="truncate">{accountName}</span>
+        <span aria-hidden="true" className="text-[10px]">
+          ▾
+        </span>
+      </summary>
+      <div className="border-border-muted bg-surface absolute right-0 z-20 mt-2 w-56 rounded-lg border p-2 shadow-lg">
+        <p className="text-foreground-muted truncate px-3 py-1.5 text-xs">
+          {accountName}
+        </p>
+        <Link
+          href="/dashboard"
+          className="hover:bg-brand-50 block rounded-md px-3 py-2 text-sm transition-colors"
+        >
+          Dashboard
+        </Link>
+        <Link
+          href="/account"
+          className="hover:bg-brand-50 block rounded-md px-3 py-2 text-sm transition-colors"
+        >
+          Account settings
+        </Link>
+        <div className="border-border-muted mt-1 border-t pt-1">
+          <SignOutButton className="hover:bg-brand-50 hover:text-brand-800 block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors disabled:opacity-60" />
+        </div>
+      </div>
+    </details>
   );
 }

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { getAuthContext } from "@/lib/auth/session";
+import { requireAuthRedirect } from "@/lib/auth/session";
+import { PASSWORD_UPDATED_MESSAGE } from "@/lib/auth/login-messages";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isIdentificationPersistenceEnabled } from "@/lib/env";
 import { PlantImage } from "@/components/plants/plant-image";
@@ -29,11 +30,14 @@ interface Overview {
   failed: boolean;
 }
 
-async function loadOverview(): Promise<Overview> {
-  const auth = await getAuthContext();
-  if (!auth.userId)
-    return { email: null, displayName: null, savedCount: null, failed: false };
+type DashboardSearchParams = Promise<{
+  confirmed?: string | string[] | undefined;
+  reset?: string | string[] | undefined;
+}>;
 
+async function loadOverview(
+  auth: Awaited<ReturnType<typeof requireAuthRedirect>>
+): Promise<Overview> {
   const supabase = await createSupabaseServerClient();
   const { count, error } = await supabase
     .from("saved_plants")
@@ -74,18 +78,35 @@ function StatCard({
   );
 }
 
-async function DashboardContent() {
-  const { email, displayName, savedCount, failed } = await loadOverview();
+async function DashboardContent({
+  searchParams,
+}: {
+  searchParams: DashboardSearchParams;
+}) {
+  const auth = await requireAuthRedirect("/dashboard");
+  const query = await searchParams;
+  const { email, displayName, savedCount, failed } = await loadOverview(auth);
   const persistenceOn = isIdentificationPersistenceEnabled();
+
+  const confirmationMessage =
+    query.reset === "1"
+      ? PASSWORD_UPDATED_MESSAGE
+      : query.confirmed === "1"
+        ? "Email confirmed — you're signed in."
+        : null;
 
   return (
     <div>
+      {confirmationMessage && (
+        <p
+          role="status"
+          className="text-success bg-success/10 rounded-md px-3 py-2 text-sm"
+        >
+          {confirmationMessage}
+        </p>
+      )}
       <p className="text-foreground-muted text-sm">
-        {displayName || email ? (
-          <>Signed in as {displayName ?? email}</>
-        ) : (
-          "Your PlantAI overview"
-        )}
+        Signed in as {displayName ?? email ?? "your account"}
       </p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -129,7 +150,8 @@ async function DashboardContent() {
               immediately but not stored — storing them requires the owner to
               enable database persistence
               (<code className="text-xs">PLANTAI_PERSISTENCE_ENABLED</code>).
-              Nothing is lost from demo use: the identify flow itself works.
+              Nothing is lost from trying identification: the identify flow
+              itself works.
             </p>
           )}
         </StatCard>
@@ -195,12 +217,16 @@ function OverviewSkeleton() {
   );
 }
 
-export default function DashboardPage() {
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams: DashboardSearchParams;
+}) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
       <Suspense fallback={<OverviewSkeleton />}>
-        <DashboardContent />
+        <DashboardContent searchParams={searchParams} />
       </Suspense>
     </div>
   );

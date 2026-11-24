@@ -109,8 +109,9 @@ for exactly what is switched on and what is deliberately off.
   with local, license-verified photography and on-page search.
 - **Plant species detail pages** — structured care information, imagery with
   attribution, and shareable URLs for every species.
-- **User authentication** — email sign-up, sign-in, password reset, and email
-  confirmation flows built on Supabase Auth.
+- **User authentication** — email sign-up, sign-in, sign-out, password reset,
+  and email confirmation flows built on Supabase Auth. There is no one-click
+  anonymous login; use Create account or Sign in.
 - **Saved plants** — logged-in users can save identification results to their
   account (server actions with validation).
 - **User dashboard** — a personal overview for saved plants and activity.
@@ -408,7 +409,7 @@ Details and reporting guidance: [`SECURITY.md`](SECURITY.md).
 | Camera capture & image validation | ✅ Working |
 | On-device upload optimization | ✅ Working (browser-dependent; degrades honestly) |
 | Plant library (10 species) + detail pages | ✅ Working |
-| Authentication (sign-up / in / reset / confirm) | ✅ Working |
+| Authentication (sign-up / in / out / reset / confirm) | ✅ Implemented + offline regression-tested; real-email E2E needs an owner-approved test user |
 | Saved plants + dashboard | ✅ Working |
 | Contact form | ✅ Working |
 | Live Pl@ntNet identification | 🔜 Code complete — **owner-gated activation** |

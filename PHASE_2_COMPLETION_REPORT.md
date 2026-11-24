@@ -54,8 +54,8 @@ Gates: `npm run lint` ✅ (0 errors/warnings) · `npm run typecheck` ✅ · `npm
 ## 4. Tests NOT run (honest gaps)
 
 - **Authenticated 20/day rate limit** — verifying requires creating a real Supabase test user (forbidden without owner approval). The code path is identical to the verified anonymous path except the key prefix; not claimed as tested.
-- **Full auth happy-path with real emails** (signup → emailed confirm link → login): the server-side callback, form validation, and route logic are implemented and unit-reasoned, but end-to-end execution needs a real email deliverable test user — same owner-approval constraint. Sign-out/cookie-refresh runtime behavior likewise untested (no session exists to sign out of).
-- **Vitest unit suite** — no test framework is configured in the repo (Phase 1 decision; zero-budget tooling). API contract tests above cover the pipeline behaviorally. Vitest remains deferred (TASKS P6-05).
+- **Full auth happy-path with real emails** (signup → emailed confirm link → login): the server-side callback, form validation, and route logic are implemented and unit-reasoned, but end-to-end execution needs a real email deliverable test user — same owner-approval constraint. Sign-out/cookie-refresh runtime behavior likewise remains untested with a real user. *(2026-11-24 correction: the temporary one-click anonymous sign-in that previously supplied a session has been removed; no real-user E2E is claimed.)*
+- **Vitest unit suite** — no test framework was configured at the time of this Phase 2 report. *(2026-11-24 correction: Vitest is now configured via `npm test`; offline pure-function and source-contract auth tests exist. Real browser E2E is still not performed.)*
 - **Client-side image resize/compress + EXIF strip** — deferred (would need a new dependency; server-side validation is authoritative).
 - **Load/concurrency smoke** (simulated 20-in-flight) — not run; the semaphore exists but burst behavior is unmeasured.
 - **Live Pl@ntNet identification** — intentionally never attempted (mock-only phase; no account, no key generated, no quota consumed).

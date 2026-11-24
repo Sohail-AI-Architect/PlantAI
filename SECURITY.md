@@ -4,7 +4,7 @@
 > Facts about Pl@ntNet, Supabase, and the stack (quotas, plans, terms) are cited from [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md). Anything stated here without a source below is **UNVERIFIED** until checked at implementation time.
 > Related: [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) · [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) · [`ENVIRONMENT_SETUP.md`](ENVIRONMENT_SETUP.md) · [`LEGAL_AND_COMPLIANCE.md`](LEGAL_AND_COMPLIANCE.md) · [`TESTING_PLAN.md`](TESTING_PLAN.md)
 >
-> **Phase 2 implementation status (2026-11-12):** session identity is verified server-side via `auth.getClaims()` (`src/lib/auth/session.ts`, `src/proxy.ts`) — `getSession()` user data is never trusted for authorization; identity claims are signature-verified per the current official Supabase SSR guidance. Auth inputs are validated client + server side; auth error messages are privacy-safe (never reveal account existence). `.env.local` verified git-ignored; no service-role key reaches client bundles (references live only in server-only modules guarded by `requireServerOnly()`); no raw IPs are logged — only a salted SHA-256 hash feeds the in-memory counter. Mock identification responses are transparently labelled (`mode:"mock"` + `mockNotice`) and never presented as real AI output.
+> **Auth repair status (2026-11-24):** session identity is verified server-side via `auth.getClaims()` (`src/lib/auth/session.ts`, `src/proxy.ts`) — `getSession()` user data is never trusted for authorization. Auth form inputs are validated client-side before calling Supabase Auth; Supabase enforces account/password rules server-side, and route guards verify claims again on protected pages. Auth error messages are privacy-safe (never reveal account existence). The temporary one-click anonymous sign-in UI has been removed. `.env.local` verified git-ignored; no service-role key reaches client bundles; no raw IPs are logged — only a salted SHA-256 hash feeds the in-memory counter. Mock identification responses are transparently labelled (`mode:"mock"` + `mockNotice`) and never presented as real AI output.
 
 ---
 
@@ -107,35 +107,9 @@ The API key is treated as the most abusable secret (its abuse directly consumes 
 - **Login throttling.** Supabase Auth has built-in rate limiting / brute-force protection on auth endpoints (commonly cited as 1 req / 60 s on sensitive auth routes historically — **UNVERIFIED** value; verify current dashboard limits at scaffold). PlantAI additionally rate-limits the app's own login endpoints server-side as a defensive layer (see §7).
 - **Session handling.**
   - Sessions are Supabase-issued JWTs with default refresh-token behavior; the app uses `@supabase/ssr`-style cookie-based session storage so tokens live in httpOnly cookies, not localStorage (XSS theft risk reduced).
-  - Logout invalidates the local session cookie; Supabase `signOut()` also revokes the refresh token server-side.
-  - Middleware performs lightweight session refresh and route protection; actual data protection is enforced by RLS, not just middleware (defense in depth: middleware is UX + a guard, RLS is the real wall).
-- **Middleware route protection pattern** (canonical placeholder, exact imports finalized in Phase 1/2):
-
-  ```ts
-  // middleware.ts (sketch, imports finalized at scaffold)
-  import { NextResponse, type NextRequest } from 'next/server'
-
-  const PROTECTED = ['/dashboard', '/my-plants', '/saved']
-
-  export async function middleware(req: NextRequest) {
-    const res = NextResponse.next()
-    // refresh Supabase session into cookies (pattern per supabase-ssr docs)
-    // const { user } = await refreshAndGetUser(req, res)  // uses server client
-    // if (!user && PROTECTED.some(p => req.nextUrl.pathname.startsWith(p))) {
-    //   const url = req.nextUrl.clone()
-    //   url.pathname = '/login'
-    //   url.search = `?next=${encodeURIComponent(req.nextUrl.pathname)}`
-    //   return NextResponse.redirect(url)
-    // }
-    return res
-  }
-
-  export const config = {
-    matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-  }
-  ```
-
-  *(Sketch only — the working version lands in Phase 2 alongside the Supabase client setup. Do not copy-paste as-is into code.)*
+  - Logout attempts global refresh-token revocation first, then always falls back to `signOut({ scope: "local" })` if the auth endpoint is unreachable, so this browser's cookies are cleared even offline. Server-side revocation is best-effort; already-issued access JWTs cannot be recalled before expiry.
+  - The Next.js 16 proxy (`src/proxy.ts`) performs lightweight session refresh and route protection; protected Server Components also call `requireAuthRedirect()` and data protection is enforced by RLS (defense in depth).
+- **Route protection implementation:** `src/proxy.ts` (Next.js 16 replaces `middleware.ts`) verifies/refreshes claims once per request, protects `/dashboard`, `/my-plants`, `/saved-plants`, `/reminders` and `/account`, and bounces signed-in users from guest-only `/login`, `/signup` and `/forgot-password`. Query flags such as `?confirmed=1` are preserved through that bounce so success messages remain visible. Protected pages additionally call `requireAuthRedirect()` server-side.
 - **Admin authorization.**
   - `profiles.role` values `'user' | 'admin'` only; an RLS trigger/policy rejects any update of `role` by non-admins.
   - A Postgres `SECURITY DEFINER` helper `is_admin()` (or equivalent claim + policy check — pattern decision documented in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md)) provides the RLS gate for admin-only tables (`blog_posts` moderation, `contact_messages`, `app_settings`).

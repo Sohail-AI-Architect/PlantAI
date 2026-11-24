@@ -13,10 +13,11 @@ export const metadata: Metadata = {
  * server-side (session cookie present), or (2) the PKCE recovery email
  * links DIRECTLY here with a one-time `?code=`, which ResetPasswordForm
  * exchanges client-side (the code verifier lives in this browser).
- * Suspense: the form reads `?code` search params at runtime (Next.js 16
- * Cache Components), mirroring the /login page pattern. Not in the
- * proxy's guest-only list: a signed-in visitor may also reach it, which
- * is harmless — updateUser requires a session either way.
+ * Suspense: the form reads `?code` / `?token_hash` search params at runtime
+ * (Next.js 16 Cache Components), mirroring the /login page pattern. Not in
+ * the proxy's guest-only list: a signed-in visitor may also reach the page,
+ * but the form rejects them unless this browser verified a genuine recovery
+ * exchange/OTP — an ordinary session is not enough.
  */
 export default function ResetPasswordPage() {
   return (

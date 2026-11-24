@@ -136,14 +136,14 @@ Provenance rules (Stage D):
 
 ## 6. E2E scenarios (Playwright)
 
-Launched in Phase 2 alongside real auth + identify flows. Pl@ntNet is **always mocked** at the route level in E2E (Playwright `page.route()` intercept) — never live.
+Planned E2E scenarios (Playwright is **not installed/configured** in this repo; none of these have been executed). If implemented, Pl@ntNet must be **always mocked** at the route level (`page.route()` intercept) — never live.
 
 | # | Scenario | Steps | Asserts |
 |---|---|---|---|
 | 1 | **Visitor identifies plant (anonymous)** | Open home → upload 1 fixture image → get result | Results shown; confidence rendered; no auth prompt needed; rate-limit message appears on 6th attempt (mocked) |
-| 2 | **Authed user full loop** | Sign in (magic-link mocked or test-mode password) → identify → save result → open My Plants → see saved plant → delete it | End-to-end persistence via app surfaces only |
+| 2 | **Authed user full loop** *(not run; needs owner-approved test user)* | Sign in with a normal email/password test account (no one-click anonymous sign-in exists) → identify → save result → open My Plants → see saved plant → delete it | End-to-end persistence via app surfaces only |
 | 3 | **Library search** | Open Plant Library → type search term → filter matches → open plant detail | Search is a client/DB query (specifier per Architektur); no upstream call |
-| 4 | **Login / logout** | Sign in → sign out → protected route bounce to /login | Middleware pattern works |
+| 4 | **Login / logout** *(not run; needs owner-approved test user)* | Sign in → sign out → protected route bounce to `/login` → refresh cannot restore session | Proxy + server guards work |
 | 5 | **Contact form** | Fill form → submit → success message → honeypot-triggered fake bot submission is silently dropped | No real email needed in MVP |
 | 6 | **Blog page renders** | Visit /blog (Phase 3) → posts list → single post | RSC + rendering path smoke-tested |
 | 7 | **PWA install** | *(deferred to Phase 6 per MVP exclusions — placeholder)* | — |

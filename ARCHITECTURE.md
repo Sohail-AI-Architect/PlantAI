@@ -66,7 +66,7 @@ plantai/
 │   │   ├── cache.ts                #   perceptual-hash lookup + invalidation helpers
 │   │   └── config.ts               #   env-based config (typed)
 │   ├── actions/                    #   "use server" modules: auth-adjacent CRUD, contact, admin (API_DOCUMENTATION.md §Server Actions)
-│   ├── middleware.ts               #   session refresh + protected-route redirects
+│   ├── proxy.ts                    #   Next 16 session refresh + protected-route redirects
 │   └── types/                      #   shared TS types (Pl@ntNet normalized types, DB row types)
 ├── supabase/
 │   ├── migrations/                 #   SQL migrations, applied with Supabase CLI (DATABASE_SCHEMA.md §Migration strategy)
@@ -154,7 +154,7 @@ Key structural facts:
 | Concern | Pattern |
 |---|---|
 | Public pages (`/`, `/library?q=`, `/plant/[slug]`, `/blog`, static pages) | RSC; data fetched server-side with Supabase anon client; cached where safe (`revalidate` per route) |
-| Authenticated pages (`/my-plants`, `/dashboard`, `/reminders`, `/saved-plants`, `/account`) | RSC; session from cookies via `@supabase/ssr` server client; `middleware.ts` refreshes/validates session before render |
+| Authenticated pages (`/my-plants`, `/dashboard`, `/reminders`, `/saved-plants`, `/account`) | RSC; session from cookies via `@supabase/ssr` server client; `src/proxy.ts` refreshes/validates session before render, and protected pages call `requireAuthRedirect()` as defense in depth |
 | Client-side interactivity | Minimal islands, see §3.2 |
 | Mutations | Server Actions (`src/actions/*`) calling Supabase with the user's server-session client → RLS applies (API_DOCUMENTATION.md §Server Actions catalog) |
 | Search state | URL query params (`/library?q=&category=`) — server-rendered results, no client store |
@@ -256,26 +256,28 @@ Auth signup/login/reset: **not** Server Actions — Supabase JS client on small 
 
 | Flow | Mechanism | Notes |
 |---|---|---|
-| Signup | `signUp({ email, password })` on a small client component | Email-confirmation redirect → `/?confirmed=1` toast |
-| Email confirm | Supabase-hosted email template → `auth/v1/verify` callback → `auth/callback` route handler | Handler exchanges code → session cookie |
-| Login | same client form, session stored in cookies | Sets `sb-*` cookies for the SSR client |
-| Logout | client `signOut()` + router refresh | Clears server cookie via hidden Server Action in the same step |
-| Password reset | `resetPasswordForEmail` → `/auth/callback` → update form at `/account` | Rare flow; simple UI |
-| Session refresh | `middleware.ts` uses `@supabase/ssr` `updateSession()` on every request | Single source of session truth for RSC |
+| Signup | `signUp()` on a client component with username metadata | PKCE confirmation link → `/auth/link?next=…` → client code exchange → intended page |
+| Email confirm | token_hash template → `/auth/confirm` (`verifyOtp`) OR PKCE template → `/auth/link` | Session cookie established by Supabase; success flag preserved to `/dashboard` |
+| Login | client `signInWithPassword()` / `signInWithOtp()`; session in cookies | Validated `next` path; never creates an account from the login page |
+| Logout | client `signOut({ scope: "global" })` with guaranteed local fallback + router refresh | Clears browser cookies; server-side revocation is best-effort offline |
+| Password reset | `resetPasswordForEmail` → `/reset-password?code=…` → `updateUser()` | Local session cleared before guest-only `/login?reset=1` so the message is visible |
+| Session refresh | `src/proxy.ts` verifies/refreshes claims once per request via `@supabase/ssr` | Single source of session truth for RSC |
+| One-click anonymous sign-in | **Removed** — no anonymous sign-in UI, helper or badge | All sessions are normal Supabase email/password or magic-link sessions |
 | (Future) OAuth | Supabase Google provider (available on Free, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Supabase) | Non-MVP; same callback route reused |
 
 Magic links are a fallback option if email-confirm friction needs lowering — decision deferred to Phase 2 implementation.
 
 ### 7.2 Route protection
 
-`src/middleware.ts` maintains a static set of protected URL prefixes:
+`src/proxy.ts` (Next.js 16 name for middleware) maintains a static set of protected URL prefixes:
 
 ```ts
-const PROTECTED = ["/my-plants", "/dashboard", "/reminders", "/account", "/saved-plants", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/my-plants", "/saved-plants", "/reminders", "/account"];
 ```
 
 - Unauthenticated request to any of these → redirect `/login?next=<path>`.
-- `/admin` additionally requires `profiles.role = 'admin'`: the role is checked in the RSC via the session + profiles lookup, keeping middleware simple — **defense in depth**: middleware redirect is UX, RLS + `is_admin()` is security; an attacker cannot read admin data by tampering with cookies because RLS/deny-by-default blocks it at Supabase).
+- `/dashboard` and `/account` also call `requireAuthRedirect()` inside their Suspense boundaries; `/my-plants`, `/saved-plants` and `/reminders` do the same — **defense in depth**: proxy redirect is UX, server guards + RLS + `is_admin()` are security.
+- `/admin` is a public stub in the current implementation, not an authorized admin surface; its RLS/role design remains a Phase 4 item.
 - `profiles` row auto-created on signup by a DB trigger (`handle_new_user()` — DATABASE_SCHEMA.md §Triggers), so role always exists for new sessions.
 
 ### 7.3 Role check pattern

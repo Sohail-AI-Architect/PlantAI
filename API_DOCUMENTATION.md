@@ -73,7 +73,7 @@ Cross-reference: the runtime pipeline diagram is in [`ARCHITECTURE.md`](ARCHITEC
 | Logged in (session cookie present) | Authenticated user | Per-user: **20/day** (default; tunable via `app_settings.identify.daily_limit.authenticated`) |
 | Admin | Has `profile.role='admin'` | Same as authenticated (component: admins still respect upstream 500/day pool — [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)) |
 
-- No `Authorization` header is ever needed — identity comes from the `@supabase/ssr` session cookie via `middleware.ts`.
+- No `Authorization` header is ever needed — identity comes from the `@supabase/ssr` session cookie via `src/proxy.ts` (Next.js 16 `proxy`, formerly middleware).
 - Anonymous use is a **product decision** (try-it-before-signup, `REQUIREMENTS.md`), paid for with stricter limits + optional captcha in Phase 5 if abuse appears (`SECURITY.md`).
 - Limits are *discoverable via response headers* (§2.5) and *enforceable gracefully* — the UI waits for `429` to render the “quota reached” state rather than error text (`UI_UX_DESIGN.md`).
 
@@ -281,7 +281,7 @@ Duplicated intentionally at both boundaries (client gives pre-click UX; server g
 | V5 | All photos = same plant | Copy in UI (“photos of the same individual”) | **Not verifiable automatically** — accepted on trust + upstream validation |
 | V6 | `organ` ∈ five-value enum | Select dropdown | zod enum, default `auto` |
 | V7 | lat/lon numeric ranges; only both-or-neither | Warn on one-without-other | zod refine (`both` XOR `neither`) |
-| V8 | Session cookie validity | (used transparently) | `middleware.ts` + `@supabase/ssr` parse; invalid cookie = anonymous treat (not an error) |
+| V8 | Session cookie validity | (used transparently) | `src/proxy.ts` + `@supabase/ssr` parse; invalid cookie = anonymous treat (not an error) |
 | V9 | Filename/path safety | (planned — **no storage path assembly exists yet**; when Storage uploads ship, strip path separators and replace the original name entirely with a UUID storage name) | Strip path separators; UUID storage name replaces original name entirely |
 
 Any validation failure never touches Pl@ntNet (quota rule, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)).
@@ -358,8 +358,9 @@ These run through the **admin client** path (session of an admin user invoking a
 Authentication (signup, confirm, login, reset, logout) **is not** implemented as Server Actions, deliberately:
 
 - Supabase's JS client handles verification/flows (PKCE, email confirm links, session cookie shaping) natively in the browser.
-- A Server Action would need cookie-wrapping glue (`@supabase/ssr` supports it, but browser-native flows differ minimally) — so MVP uses small **client components** + `@supabase/ssr` middleware as designed in `ARCHITECTURE.md` §7.
-- Result: fewer custom flows to test; middleware refreshes the session regardless of how auth was initiated.
+- A Server Action would need cookie-wrapping glue (`@supabase/ssr` supports it, but browser-native flows differ minimally) — so MVP uses small **client components** + `@supabase/ssr` cookies and the Next.js 16 proxy (`src/proxy.ts`).
+- Result: fewer custom flows to test; the proxy refreshes the session and protected Server Components re-check claims regardless of how auth was initiated.
+- The temporary one-click anonymous sign-in flow has been removed; email/password, magic link, confirmation and password recovery are the supported flows.
 
 ### 3.5 Uniform action contract
 

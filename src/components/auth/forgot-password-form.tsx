@@ -4,24 +4,23 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  forgotPasswordErrorMessage,
+  resetPasswordRedirectUrl,
+  safeAuthPath,
+  withAuthNext,
+} from "@/lib/auth/auth-contracts";
+import { useSubmitGate } from "@/lib/auth/use-submit-gate";
 
 /**
  * Forgot-password form (FR-AUTH-006). Always shows the same neutral success
- * message whether or not the email exists (privacy standard — UI_UX_DESIGN
- * §6.6: never reveal account existence).
- *
- * F8 (Phase 5): the reset email's redirect target is the /reset-password
- * PAGE itself. The browser Supabase client uses the PKCE auth flow
- * (@supabase/ssr default), so GoTrue turns the emailed link into
- * `{redirectTo}?code=…`, and the one-time code can ONLY be exchanged by the
- * browser client that holds the matching code_verifier (stored locally at
- * request time). Pointing redirectTo at /auth/confirm was therefore broken:
- * that Route Handler only understands token_hash links, so every recovery
- * click bounced to /login?error=link (the exact production incident). The
- * token_hash-style callback remains in /auth/confirm for sign-up links.
+ * message whether or not the email exists. The reset email lands directly on
+ * /reset-password with the one-time PKCE code; /auth/confirm only handles
+ * token_hash-style links.
  */
 export function ForgotPasswordForm() {
   const searchParams = useSearchParams();
+  const nextPath = safeAuthPath(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(
     searchParams.get("error") === "link"
@@ -29,33 +28,34 @@ export function ForgotPasswordForm() {
       : null
   );
   const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, finish } = useSubmitGate();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!begin()) return;
     setError(null);
+
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setError("Enter a valid email address.");
+      finish();
       return;
     }
-    setBusy(true);
+
     try {
       const supabase = createSupabaseBrowserClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
-        // F8: link lands DIRECTLY on the reset-password page, where the
-        // PKCE one-time `?code=` is exchanged client-side (the code
-        // verifier lives in THIS browser's storage). Never /auth/confirm —
-        // that route only handles token_hash-style links.
-        { redirectTo: `${window.location.origin}/reset-password` }
+        { redirectTo: resetPasswordRedirectUrl(window.location.origin, nextPath) }
       );
       if (resetError) {
-        setError("Couldn't send the reset email — check the address and try again.");
+        setError(forgotPasswordErrorMessage(resetError));
         return;
       }
       setSent(true);
+    } catch (resetException) {
+      setError(forgotPasswordErrorMessage(resetException));
     } finally {
-      setBusy(false);
+      finish();
     }
   }
 
@@ -70,7 +70,10 @@ export function ForgotPasswordForm() {
             short time.
           </p>
         </div>
-        <Link href="/login" className="text-brand-700 mt-4 inline-block text-sm font-medium underline">
+        <Link
+          href={withAuthNext("/login", nextPath)}
+          className="text-brand-700 mt-4 inline-block text-sm font-medium underline"
+        >
           Back to sign in →
         </Link>
       </div>
@@ -80,11 +83,19 @@ export function ForgotPasswordForm() {
   return (
     <div className="mt-6 space-y-6">
       {error && (
-        <p role="alert" className="text-error bg-error/10 rounded-md px-3 py-2 text-sm">
+        <p
+          role="alert"
+          className="text-error bg-error/10 rounded-md px-3 py-2 text-sm"
+        >
           {error}
         </p>
       )}
-      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        aria-busy={busy}
+        className="space-y-4"
+      >
         <div>
           <label htmlFor="email" className="block text-sm font-medium">
             Email
@@ -103,6 +114,7 @@ export function ForgotPasswordForm() {
         <button
           type="submit"
           disabled={busy}
+          aria-busy={busy}
           className="bg-brand-600 hover:bg-brand-700 w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-60"
         >
           {busy ? "Sending…" : "Send reset link"}
@@ -110,7 +122,10 @@ export function ForgotPasswordForm() {
       </form>
       <p className="text-foreground-muted text-center text-sm">
         Remembered it?{" "}
-        <Link href="/login" className="text-brand-700 hover:text-brand-800 underline">
+        <Link
+          href={withAuthNext("/login", nextPath)}
+          className="text-brand-700 hover:text-brand-800 underline"
+        >
           Sign in
         </Link>
       </p>

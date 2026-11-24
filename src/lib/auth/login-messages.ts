@@ -47,6 +47,38 @@ export function isRateLimitError(error: unknown): boolean {
 }
 
 /**
+ * A failed fetch / timeout is not a credential failure. Supabase's retryable
+ * fetch error has a stable `name`; plain network errors from a browser or
+ * test double are matched by name/message only. The message never includes
+ * the original error text (which could contain tokens or URLs).
+ */
+export function isNetworkAuthError(error: unknown): boolean {
+  if (!error) return false;
+  if (typeof error === "object") {
+    const name = (error as { name?: unknown }).name;
+    if (
+      name === "AuthRetryableFetchError" ||
+      name === "TypeError" ||
+      name === "AbortError"
+    ) {
+      return true;
+    }
+    const status = (error as { status?: unknown }).status;
+    if (status === 0 || status === 408 || status === 429) {
+      // 429 is classified as a rate limit first by the callers; treat it as
+      // network-retryable here only as a last resort.
+      return true;
+    }
+  }
+  if (error instanceof Error) {
+    return /fetch|network|timeout|timed out|offline|ECONNRESET|ENOTFOUND/i.test(
+      error.message
+    );
+  }
+  return false;
+}
+
+/**
  * Password sign-in error mapping (F6). ALL non-rate-limit failures map to
  * the one generic message, by design (privacy standard). The ONE exception
  * is the endpoint throttle (429 `over_request_rate_limit` after repeated
@@ -56,9 +88,13 @@ export function isRateLimitError(error: unknown): boolean {
  * retyping. Kept as a function so the two branches are unit-testable.
  */
 export function passwordSignInErrorMessage(error: unknown): string {
-  return isRateLimitError(error)
-    ? "Couldn't sign in — too many sign-in attempts have been made recently. Please wait a little and try again."
-    : PASSWORD_SIGN_IN_ERROR_MESSAGE;
+  if (isRateLimitError(error)) {
+    return "Couldn't sign in — too many sign-in attempts have been made recently. Please wait a little and try again.";
+  }
+  if (isNetworkAuthError(error)) {
+    return "Couldn't sign in right now — check your connection and try again.";
+  }
+  return PASSWORD_SIGN_IN_ERROR_MESSAGE;
 }
 
 /**
@@ -68,9 +104,13 @@ export function passwordSignInErrorMessage(error: unknown): string {
  * generic message as every other non-rate-limit failure).
  */
 export function magicLinkErrorMessage(error: unknown): string {
-  return isRateLimitError(error)
-    ? "Couldn't send a sign-in link — too many sign-in emails have been requested this hour. Please wait a little and try again."
-    : "Couldn't send a sign-in link — check the address and try again.";
+  if (isRateLimitError(error)) {
+    return "Couldn't send a sign-in link — too many sign-in emails have been requested this hour. Please wait a little and try again.";
+  }
+  if (isNetworkAuthError(error)) {
+    return "Couldn't send a sign-in link right now — check your connection and try again.";
+  }
+  return "Couldn't send a sign-in link — check the address and try again.";
 }
 
 /**
@@ -79,9 +119,13 @@ export function magicLinkErrorMessage(error: unknown): string {
  * has an account (identical to the forgot-password pattern).
  */
 export function resendConfirmationErrorMessage(error: unknown): string {
-  return isRateLimitError(error)
-    ? "Couldn't send a confirmation email — too many emails have been requested this hour. Please wait a little and try again."
-    : "Couldn't send a confirmation email right now — please try again later.";
+  if (isRateLimitError(error)) {
+    return "Couldn't send a confirmation email — too many emails have been requested this hour. Please wait a little and try again.";
+  }
+  if (isNetworkAuthError(error)) {
+    return "Couldn't send a confirmation email right now — check your connection and try again.";
+  }
+  return "Couldn't send a confirmation email right now — please try again later.";
 }
 
 /**

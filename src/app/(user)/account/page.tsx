@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { getAuthContext } from "@/lib/auth/session";
+import { requireAuthRedirect } from "@/lib/auth/session";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export const metadata: Metadata = {
@@ -10,26 +10,12 @@ export const metadata: Metadata = {
 };
 
 /*
- * /account — completed MVP slice: real session info + sign-out, with the
- * Phase 4 items (profile editing, "Delete my data" erasure flow) stated
- * honestly as pending. The erasure flow has a documented DB design
- * (ON DELETE CASCADE, DATABASE_SCHEMA.md §9) — the UI is Phase 4 work.
+ * /account — real session info + sign-out, protected both by the proxy and
+ * by this server-side claims guard. Phase 4 items (profile editing and the
+ * "Delete my data" flow) remain honestly listed as pending.
  */
 async function AccountContent() {
-  const auth = await getAuthContext();
-  if (!auth.userId) {
-    return (
-      <div className="border-border-muted bg-surface-muted mt-8 rounded-lg border px-4 py-8 text-sm">
-        <p className="font-medium">Not signed in</p>
-        <p className="text-foreground-muted mt-2">
-          <Link href="/login" className="underline hover:text-foreground">
-            Sign in
-          </Link>{" "}
-          to manage your account.
-        </p>
-      </div>
-    );
-  }
+  const auth = await requireAuthRedirect("/account");
 
   return (
     <div className="mt-8 space-y-6">
@@ -44,13 +30,6 @@ async function AccountContent() {
         {auth.email ? (
           <p className="text-foreground-muted mt-1 text-xs">{auth.email}</p>
         ) : null}
-        {auth.isAnonymous && (
-          <p className="text-foreground-muted mt-2 text-xs">
-            This is a temporary demo account. Saved items are visible only in
-            this browser session and the account is not tied to an email
-            address.
-          </p>
-        )}
         <div className="mt-4">
           <SignOutButton />
         </div>

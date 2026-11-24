@@ -4,107 +4,189 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  SIGN_OUT_ERROR_MESSAGE,
+  canUpdatePassword,
+  isVerifiedRecoveryCodeExchange,
+  isVerifiedRecoveryOtp,
+  passwordUpdateErrorMessage,
+  safeAuthPath,
+  withAuthNext,
+  type ResetLinkState,
+} from "@/lib/auth/auth-contracts";
+import { clearBrowserSession } from "@/lib/auth/session-cleanup";
+import { useSubmitGate } from "@/lib/auth/use-submit-gate";
 import { recoveryLinkErrorMessage } from "@/lib/auth/login-messages";
 
 /**
- * New-password form (FR-AUTH-006, hardened by F8 — Phase 5 report).
+ * Set-a-new-password form (FR-AUTH-006).
  *
- * Two safe paths reach this page with a recovery session:
- * 1. token_hash link → /auth/confirm verifies server-side → session cookie
- *    already established when this form mounts.
- * 2. PKCE link (the live flow: the browser Supabase client is PKCE by
- *    default, so GoTrue's emailed link is `{redirectTo}?code=…`) → the
- *    one-time code is exchanged HERE, client-side, because the matching
- *    code_verifier lives in THIS browser's local storage. A server route
- *    cannot perform this exchange — pointing the email at /auth/confirm
- *    was the production bug (every recovery click bounced to
- *    /login?error=link).
+ * Two safe entry paths establish a VERIFIED recovery authorization before
+ * this form is usable:
+ * 1. PKCE link → `exchangeCodeForSession()` returns the SDK's
+ *    `redirectType: "recovery"` marker (stored by `resetPasswordForEmail()`);
+ * 2. token_hash link → this browser calls `verifyOtp({ type: "recovery" })`
+ *    and only a successful Supabase response unlocks the form.
  *
- * The exchange runs exactly once (ref-guarded against re-mounts); the
- * `?code=` value is stripped from the URL afterwards so a consumed code is
- * never re-submitted or left in a shareable address bar. Invalid, expired,
- * and already-used codes all show the SAME neutral message —
- * indistinguishable by design (privacy standard) — with a link to request
- * a fresh reset email. The password update itself still runs on the
- * recovery session via `updateUser`.
+ * A direct visit with neither signal — including an already signed-in user —
+ * shows the same neutral invalid-link state. After a successful update we
+ * clear the local session before landing on guest-only /login, so the
+ * "password updated — sign in with your new password" message is actually
+ * visible instead of being bounced straight to /dashboard.
  */
+
 export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = safeAuthPath(searchParams.get("next"));
+  const redirectPath = withAuthNext("/reset-password", nextPath);
+
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  // null = no ?code= in the URL (token_hash path — form shows immediately);
-  // "verifying" | "ready" | "failed" = PKCE link state machine.
-  const [linkState, setLinkState] = useState<"verifying" | "ready" | "failed">(
-    () => (searchParams.get("code") ? "verifying" : "ready")
-  );
-  const exchangedRef = useRef(false);
+  const [linkState, setLinkState] = useState<ResetLinkState>("verifying");
+  const linkCheckedRef = useRef(false);
+  const { busy, begin, finish } = useSubmitGate();
 
   useEffect(() => {
+    if (linkCheckedRef.current) return;
+    linkCheckedRef.current = true;
+
     const code = searchParams.get("code");
-    if (!code || exchangedRef.current) return;
-    exchangedRef.current = true;
-
-    // Strip the one-time code from the address bar immediately: it can only
-    // be used once, and a leftover ?code= is both useless and shareable.
-    window.history.replaceState(null, "", "/reset-password");
-
+    const tokenHash = searchParams.get("token_hash");
+    const type = searchParams.get("type");
     let cancelled = false;
-    const supabase = createSupabaseBrowserClient();
-    void supabase.auth
-      .exchangeCodeForSession(code)
-      .then(({ error }) => {
-        if (cancelled) return;
-        setLinkState(error ? "failed" : "ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setLinkState("failed");
+
+    let supabase: ReturnType<typeof createSupabaseBrowserClient>;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch {
+      // Keep the failure state update out of the effect body (React 19 lint).
+      queueMicrotask(() => {
+        if (!cancelled) setLinkState("failed");
       });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const removeSensitiveParams = () => {
+      // One-time recovery params must not stay in the address bar/shareable
+      // history. Remove them only after the exchange/verification settles.
+      window.history.replaceState(null, "", redirectPath);
+    };
+
+    if (code) {
+      // PKCE recovery: the verifier was stored by resetPasswordForEmail().
+      // Supabase returns redirectType "recovery" for that verifier; any other
+      // result (including an ordinary sign-in code) must not unlock password
+      // update.
+      void supabase.auth
+        .exchangeCodeForSession(code)
+        .then((result) => {
+          if (cancelled) return;
+          removeSensitiveParams();
+          setLinkState(isVerifiedRecoveryCodeExchange(result) ? "ready" : "failed");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          removeSensitiveParams();
+          setLinkState("failed");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (tokenHash && type === "recovery") {
+      // token_hash recovery: verifyOtp must succeed for the recovery type.
+      // A failure, expired token, or non-recovery type never enables the form.
+      void supabase.auth
+        .verifyOtp({ type: "recovery", token_hash: tokenHash })
+        .then((result) => {
+          if (cancelled) return;
+          removeSensitiveParams();
+          setLinkState(isVerifiedRecoveryOtp("recovery", result) ? "ready" : "failed");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          removeSensitiveParams();
+          setLinkState("failed");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // No recovery code or recovery token_hash: an ordinary signed-in session is
+    // intentionally NOT enough. This prevents a normal dashboard session from
+    // being repurposed into a password-reset flow by direct navigation.
+    queueMicrotask(() => {
+      if (!cancelled) setLinkState("failed");
+    });
     return () => {
       cancelled = true;
     };
-  }, [searchParams]);
+  }, [redirectPath, searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Disabled buttons are a UI hint only; the handler must reject any submit
+    // that arrives while the recovery link is not verified/ready.
+    if (!canUpdatePassword(linkState)) {
+      setError(recoveryLinkErrorMessage());
+      return;
+    }
+    if (!begin()) return;
     setError(null);
+
     if (password.length < 8) {
       setError("Use at least 8 characters.");
+      finish();
       return;
     }
     if (password !== confirm) {
       setError("Passwords don't match.");
+      finish();
       return;
     }
-    setBusy(true);
+
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error: updateError } = await supabase.auth.updateUser({ password });
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
       if (updateError) {
-        setError(
-          "The reset link may have expired. Request a fresh one from the forgot-password page."
-        );
+        setError(passwordUpdateErrorMessage(updateError));
         return;
       }
-      // F8: clear success landing — the previous ?confirmed=1 told a
-      // password-reset user "Email confirmed" (off-label).
-      router.replace("/login?reset=1");
+
+      // Guest-only /login would bounce an active recovery session to the
+      // dashboard and hide the success message. Clear local cookies first;
+      // global revocation is best-effort with a guaranteed local fallback.
+      const cleanup = await clearBrowserSession(supabase);
+      if (!cleanup.ok) {
+        setError(SIGN_OUT_ERROR_MESSAGE);
+        return;
+      }
+
+      router.replace(withAuthNext("/login?reset=1", nextPath));
       router.refresh();
-    } catch {
-      setError("Unexpected error — please try again.");
+    } catch (updateException) {
+      setError(passwordUpdateErrorMessage(updateException));
     } finally {
-      setBusy(false);
+      finish();
     }
   }
 
   if (linkState === "verifying") {
     return (
       <div className="mt-6" aria-live="polite">
-        <p className="text-foreground-muted text-sm">Verifying your reset link…</p>
+        <p className="text-foreground-muted text-sm">
+          Checking your reset link…
+        </p>
       </div>
     );
   }
@@ -112,10 +194,16 @@ export function ResetPasswordForm() {
   if (linkState === "failed") {
     return (
       <div className="mt-6" aria-live="polite">
-        <p role="alert" className="text-error bg-error/10 rounded-md px-3 py-2 text-sm">
+        <p
+          role="alert"
+          className="text-error bg-error/10 rounded-md px-3 py-2 text-sm"
+        >
           {recoveryLinkErrorMessage()}
         </p>
-        <Link href="/forgot-password" className="text-brand-700 mt-4 inline-block text-sm font-medium underline">
+        <Link
+          href={withAuthNext("/forgot-password", nextPath)}
+          className="text-brand-700 mt-4 inline-block text-sm font-medium underline"
+        >
           Request a new reset email →
         </Link>
       </div>
@@ -125,18 +213,26 @@ export function ResetPasswordForm() {
   return (
     <div className="mt-6 space-y-6">
       {error && (
-        <p role="alert" className="text-error bg-error/10 rounded-md px-3 py-2 text-sm">
+        <p
+          role="alert"
+          className="text-error bg-error/10 rounded-md px-3 py-2 text-sm"
+        >
           {error}
         </p>
       )}
-      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        aria-busy={busy}
+        className="space-y-4"
+      >
         <div>
-          <label htmlFor="password" className="block text-sm font-medium">
+          <label htmlFor="new-password" className="block text-sm font-medium">
             New password
           </label>
           <div className="relative">
             <input
-              id="password"
+              id="new-password"
               name="password"
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
@@ -149,6 +245,9 @@ export function ResetPasswordForm() {
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide new password" : "Show new password"}
+              aria-pressed={showPassword}
+              aria-controls="new-password"
               className="text-foreground-muted absolute inset-y-0 right-2 mt-1 flex items-center text-xs font-medium"
             >
               {showPassword ? "Hide" : "Show"}
@@ -156,24 +255,44 @@ export function ResetPasswordForm() {
           </div>
         </div>
         <div>
-          <label htmlFor="confirm-password" className="block text-sm font-medium">
+          <label
+            htmlFor="confirm-new-password"
+            className="block text-sm font-medium"
+          >
             Confirm new password
           </label>
-          <input
-            id="confirm-password"
-            name="confirm-password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            className="border-border-muted focus:border-brand-600 mt-1 block w-full rounded-md border px-3 py-2 text-sm"
-          />
+          <div className="relative">
+            <input
+              id="confirm-new-password"
+              name="confirm-password"
+              type={showConfirm ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="border-border-muted focus:border-brand-600 mt-1 block w-full rounded-md border px-3 py-2 pr-16 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              aria-label={
+                showConfirm
+                  ? "Hide confirmation password"
+                  : "Show confirmation password"
+              }
+              aria-pressed={showConfirm}
+              aria-controls="confirm-new-password"
+              className="text-foreground-muted absolute inset-y-0 right-2 mt-1 flex items-center text-xs font-medium"
+            >
+              {showConfirm ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || !canUpdatePassword(linkState)}
+          aria-busy={busy}
           className="bg-brand-600 hover:bg-brand-700 w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-60"
         >
           {busy ? "Updating…" : "Update password"}
@@ -181,7 +300,10 @@ export function ResetPasswordForm() {
       </form>
       <p className="text-foreground-muted text-center text-sm">
         Need a new link?{" "}
-        <Link href="/forgot-password" className="text-brand-700 hover:text-brand-800 underline">
+        <Link
+          href={withAuthNext("/forgot-password", nextPath)}
+          className="text-brand-700 hover:text-brand-800 underline"
+        >
           Forgot password
         </Link>
       </p>

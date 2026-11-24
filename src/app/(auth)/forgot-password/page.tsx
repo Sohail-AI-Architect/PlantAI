@@ -9,8 +9,9 @@ export const metadata: Metadata = {
 
 /*
  * /forgot-password — Phase 2 auth (FR-AUTH-006). Sends a Supabase recovery
- * email pointing at /auth/confirm?type=recovery. Suspense: the form reads
- * search params (Cache Components — Next.js 16).
+ * email pointing directly at /reset-password, where the PKCE one-time code
+ * is exchanged client-side. Suspense: the form reads search params
+ * (Cache Components — Next.js 16).
  */
 export default function ForgotPasswordPage() {
   return (

@@ -255,7 +255,7 @@ Migration 005 (runbook v3), persistence activation, live Pl@ntNet activation, ad
 - `SUPABASE_SERVICE_ROLE_KEY` **is present** in `.env.local` but Supabase **rejects it ("Invalid API key")** — identifications persistence + durable `identification_cache` upserts therefore fail safely: attempt → error logged once per instance → response unaffected, **no rows written** (verified: zero persistent records created). Replace the key server-side and persistence becomes drop-in (no code changes).
 
 ### Deferred / not run (honest gaps)
-- Live Pl@ntNet identification (requires owner approval + valid key), authenticated 20/day limit verification (would require creating a real test user — forbidden without owner approval), Vitest unit suite (not configured), image resize/EXIF strip, cc-by-sa credited images (n/a in mock — never fabricated), deployment. See `PHASE_2_COMPLETION_REPORT.md`.
+- Live Pl@ntNet identification (requires owner approval + valid key), authenticated 20/day limit verification (would require creating a real test user — forbidden without owner approval), image resize/EXIF strip, cc-by-sa credited images (n/a in mock — never fabricated), deployment. See `PHASE_2_COMPLETION_REPORT.md`. *(2026-11-24 correction: Vitest is now configured; offline auth regression tests exist, but real-user E2E remains deferred.)*
 
 ---
 

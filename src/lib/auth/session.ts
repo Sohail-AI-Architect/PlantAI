@@ -19,13 +19,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  */
 
 export interface AuthContext {
-  /** Verified user id, or null when anonymous. */
+  /** Verified user id, or null when no valid session exists. */
   userId: string | null;
   email: string | null;
   /** Friendly name from the profile (username/full name), or a safe fallback. */
   displayName: string | null;
-  /** True for the 1-click demo (Supabase anonymous) session. */
-  isAnonymous: boolean;
 }
 
 /** Verified claims for any server context; null user when anonymous. */
@@ -33,23 +31,21 @@ export async function getAuthContext(): Promise<AuthContext> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims) {
-    return { userId: null, email: null, displayName: null, isAnonymous: false };
+    return { userId: null, email: null, displayName: null };
   }
   const claims = data.claims as {
     sub?: string;
     email?: string;
-    is_anonymous?: boolean;
   };
   const userId = claims.sub ?? null;
   const email = claims.email ?? null;
-  const isAnonymous = claims.is_anonymous === true;
   if (!userId) {
-    return { userId: null, email, displayName: null, isAnonymous: false };
+    return { userId: null, email, displayName: null };
   }
 
   // The profile row is created by the auth trigger. A missing row or a
   // transient read error must never break the header: fall back to the
-  // email local-part (or a demo label) instead.
+  // email local-part instead.
   const { data: profile } = await supabase
     .from("profiles")
     .select("username, full_name")
@@ -58,13 +54,10 @@ export async function getAuthContext(): Promise<AuthContext> {
 
   const username = (profile?.username as string | null | undefined) ?? null;
   const fullName = (profile?.full_name as string | null | undefined) ?? null;
-  const displayName = isAnonymous
-    ? "Demo guest"
-    : fullName ||
-      username ||
-      (email ? email.split("@")[0] : "Account");
+  const displayName =
+    fullName || username || (email ? email.split("@")[0] : "Account");
 
-  return { userId, email, displayName, isAnonymous };
+  return { userId, email, displayName };
 }
 
 export async function isAuthenticated(): Promise<boolean> {

@@ -52,47 +52,59 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  // Verifies the token signature on every call; also refreshes the session
-  // when the access token is close to expiry (current SSR guidance).
-  await supabase.auth.getClaims();
+  // Verifies the token signature once per request and refreshes the session
+  // when the access token is close to expiry (current SSR guidance). Reusing
+  // the result avoids repeated auth-endpoint calls on HS256 projects.
+  const { data: authData } = await supabase.auth.getClaims();
+  const isAuthenticated = Boolean(authData?.claims);
 
   const pathname = request.nextUrl.pathname;
 
-  if (PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    const { data } = await supabase.auth.getClaims();
-    if (!data?.claims) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/login";
-      redirectUrl.searchParams.set("next", pathname);
-      const redirectResponse = NextResponse.redirect(redirectUrl);
-      // Preserve refreshed cookies + cache headers on the redirect.
-      for (const cookie of supabaseResponse.cookies.getAll()) {
-        redirectResponse.cookies.set(cookie);
-      }
-      for (const header of ["cache-control", "expires", "pragma"]) {
-        const value = supabaseResponse.headers.get(header);
-        if (value) redirectResponse.headers.set(header, value);
-      }
-      return redirectResponse;
+  if (
+    PROTECTED_PREFIXES.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`)
+    ) &&
+    !isAuthenticated
+  ) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    // Preserve the original query string as well as the path (browser
+    // fragments never reach the server, so they cannot be restored here).
+    redirectUrl.searchParams.set(
+      "next",
+      `${pathname}${request.nextUrl.search}`
+    );
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    // Preserve refreshed cookies + cache headers on the redirect.
+    for (const cookie of supabaseResponse.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
     }
+    for (const header of ["cache-control", "expires", "pragma"]) {
+      const value = supabaseResponse.headers.get(header);
+      if (value) redirectResponse.headers.set(header, value);
+    }
+    return redirectResponse;
   }
 
-  if (GUEST_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    const { data } = await supabase.auth.getClaims();
-    if (data?.claims) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/dashboard";
-      redirectUrl.search = "";
-      const redirectResponse = NextResponse.redirect(redirectUrl);
-      for (const cookie of supabaseResponse.cookies.getAll()) {
-        redirectResponse.cookies.set(cookie);
-      }
-      for (const header of ["cache-control", "expires", "pragma"]) {
-        const value = supabaseResponse.headers.get(header);
-        if (value) redirectResponse.headers.set(header, value);
-      }
-      return redirectResponse;
+  if (
+    GUEST_ONLY_PREFIXES.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`)
+    ) &&
+    isAuthenticated
+  ) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/dashboard";
+    // Keep flags such as ?confirmed=1 / ?reset=1 so the dashboard can show
+    // the success message instead of silently dropping it.
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    for (const cookie of supabaseResponse.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
     }
+    for (const header of ["cache-control", "expires", "pragma"]) {
+      const value = supabaseResponse.headers.get(header);
+      if (value) redirectResponse.headers.set(header, value);
+    }
+    return redirectResponse;
   }
 
   return supabaseResponse;

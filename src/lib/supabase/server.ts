@@ -27,8 +27,11 @@ export async function createSupabaseServerClient() {
           );
         } catch {
           // Called from a Server Component render pass where cookies are
-          // read-only; session refresh is handled by proxy/middleware in
-          // Phase 2 route protection (ARCHITECTURE.md §7.2).
+          // read-only; the proxy refreshes cookies on the response. Log only
+          // this generic fact — never cookie names, values or tokens.
+          console.warn(
+            "[auth] server cookie write unavailable; relying on proxy refresh"
+          );
         }
       },
     },
