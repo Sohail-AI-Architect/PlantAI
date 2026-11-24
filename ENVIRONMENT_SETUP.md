@@ -151,13 +151,13 @@ Zero-budget note: per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), Supaba
 
 1. Create an account at **https://my.plantnet.org** (one free account per person — per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md); do NOT create multiple/second accounts).
 2. Generate your private API key: **Account settings → API key** (`https://my.plantnet.org/settings/api-key`).
-3. Record it as `PLANTNET_API_KEY`.
+3. Record it as `PLANTNET_API_KEY`; by itself it never enables live identification.
 4. Note the free-plan constraints (direct quotes and exact values live in [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)):
    - **500 identifications/day**, resets at midnight UTC.
    - **Errors also consume 1 credit** (since 2026-02-13) — this is why PlantAI's pre-validation is strict ([`SECURITY.md`](SECURITY.md) §5–6).
    - The key is **private**: no browser-side usage, no CORS whitelisting in PlantAI — all calls are server-side ([`SECURITY.md`](SECURITY.md) §3).
 5. Keep the key out of any client code, client docs, or screenshots you share.
-6. **API host (verified 2026-11-12):** identification requests target **`https://my-api.plantnet.org`** — the `my.plantnet.org` site referenced above is the account/portal/docs site, NOT the API host. Authentication is the **`api-key` query parameter**, so the key is embedded in request URLs: **full request URLs must never be logged** (`SECURITY.md` §3). No live-mode instructions are provided here — live identification stays gated on owner approval.
+6. **API host (verified 2026-11-12):** identification requests target **`https://my-api.plantnet.org`** — the `my.plantnet.org` site referenced above is the account/portal/docs site, NOT the API host. Authentication is the **`api-key` query parameter**, so the key is embedded in request URLs: **full request URLs must never be logged** (`SECURITY.md` §3). Live identification requires explicit owner approval and **both** `PLANTNET_MODE=live` and a valid server-only key; keep `PLANTNET_MODE=mock` otherwise.
 
 ---
 
@@ -178,8 +178,8 @@ Zero-budget note: per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), Supaba
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → **Publishable key** | Yes (public by design) | **ADR-9 (2026-11-10):** new Supabase naming; replaces the older `NEXT_PUBLIC_SUPABASE_ANON_KEY` in this doc — same credential. Safe only because RLS is on for all tables ([`SECURITY.md`](SECURITY.md) §8) |
 | `SUPABASE_SECRET_KEY` | Supabase → **Project Settings → API Keys** — SECRET (server-only), format `sb_secret_...` | **No — server-only** | Bypasses RLS (resolves to the `service_role` Postgres role); never `NEXT_PUBLIC_`; needed for identifications persistence + `identification_cache`. **Canonical name per current Supabase docs (Phase 2.5, 2026-11-12)** — legacy `anon`/`service_role` JWT keys are deprecated by end of 2026 |
 | `SUPABASE_SERVICE_ROLE_KEY` (legacy) | Supabase → Project Settings → API Keys — SECRET (server-only), legacy JWT | **No — server-only** | **Deprecated by Supabase by end of 2026.** Still accepted by this codebase as a fallback when `SUPABASE_SECRET_KEY` is unset. **Phase 2 finding:** the value in `.env.local` was rejected by Supabase ("Invalid API key") — replace it with a valid `SUPABASE_SECRET_KEY` (see `PHASE_2_SUPABASE_SECRET_KEY_REPORT.md`) |
-| `PLANTNET_API_KEY` | my.plantnet.org → settings → API key — SECRET | **No — server-only** | Never leave server context; needed from Phase 2 |
-| `PLANTNET_MODE` | Developer switch (`real` / `mock`) | **No — server-only** | `mock` for all local dev/preview (protect the shared 500/day quota). **Phase 2 implemented:** `mock` is the enforced default — `live` without a valid `PLANTNET_API_KEY` fails safe back to mock; live identification additionally requires explicit owner approval |
+| `PLANTNET_API_KEY` | my.plantnet.org → settings → API key — SECRET | **No — server-only** | Never leave server context; required for live mode only when paired with `PLANTNET_MODE=live`. A key alone never enables live identification. |
+| `PLANTNET_MODE` | Explicit switch (`live` / `mock`) | **No — server-only** | `mock` for all local dev/preview (protect the shared 500/day quota). Missing, blank or invalid mode defaults to `mock`, and `mock` wins even when a key is present. Live requires both `PLANTNET_MODE=live` and a valid `PLANTNET_API_KEY`, plus explicit owner approval. |
 | `IP_HASH_SALT` | Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | **No — server-only** | **Phase 2 (new):** salt for the salted-SHA-256 IP hash used by the anonymous identify counter — raw IPs are never logged (SECURITY.md §7/§9). Unset ⇒ per-process ephemeral salt (counters stay correct within an instance; differ across instances/restarts). Add to `.env.example` (done) and set on the host for stable per-IP counters |
 | `SUPABASE_DB_URL` (optional) | Supabase → Project Settings → Database | **No — server-only (tooling)** | Only if Migrations/psql tooling is used |
 
@@ -206,6 +206,8 @@ SUPABASE_SECRET_KEY=<sb_secret_...>
 # SUPABASE_SERVICE_ROLE_KEY=<legacy-service-role-jwt>
 
 # --- Pl@ntNet (SECRET, server-only) ---
+# Live requires BOTH PLANTNET_MODE=live and a valid key. Key alone never enables live.
+PLANTNET_MODE=mock
 PLANTNET_API_KEY=<your-private-key>
 
 # --- Optional: DB URL for local tooling ---
@@ -235,7 +237,7 @@ verified until a real query runs (Phase 2).
 
 ### 5.4 `.env.example` (committed — placeholders ONLY)
 
-A committed `.env.example` with placeholder values lives inside the repo; no real keys ever. Created at Phase 1 scaffold (see [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) production env vars). Same variable names, placeholder values like `your_key_here`, comments pointing at §3 and §4 of this file for where to obtain each key, and a warning banner.
+A committed `.env.example` with placeholder/empty values lives inside the repo; no real keys ever. Created at Phase 1 scaffold (see [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) production env vars). Same variable names, safe examples such as `PLANTNET_MODE=mock` and an empty `PLANTNET_API_KEY=`, comments pointing at §3 and §4 of this file for where to obtain each key, and a warning banner. Real credentials must remain private and server-side in `.env.local` or host environment variables; never commit them.
 
 ---
 

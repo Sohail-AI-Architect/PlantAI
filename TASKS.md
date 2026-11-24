@@ -120,7 +120,7 @@
 | E | Staging deploy with live provider code present but `PLANTNET_MODE=mock` | ⬜ | — |
 | F | Database persistence + Supabase Storage activation (`PLANTAI_PERSISTENCE_ENABLED=true`) | ⬜ **Separately gated — owner approval required**; write guard stays in place until then. Write payloads are now schema-aligned (Stage F1/F2, 2026-11-14) — activation additionally requires the F-3 migration decision (organ CHECK / project defaults) | Owner only |
 | G | ONE authorized live smoke identification (valid server-only key; result + quota headers recorded) | ⬜ | Owner only |
-| H | Production activation (`PLANTNET_MODE=live` in prod env) | ⬜ | Owner only |
+| H | Production activation (`PLANTNET_MODE=live` **and** a valid server-only `PLANTNET_API_KEY` in prod env) | ⬜ | Owner only — both settings required; a key alone never enables live |
 
 ## Future work — flagged code/schema mismatches (NOT fixed in Stage A2)
 

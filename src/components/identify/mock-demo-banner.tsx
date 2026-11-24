@@ -1,9 +1,10 @@
 /*
- * Sample-data notice for the local/dev mock provider.
+ * Sample-data notice for the mock provider.
  *
- * Live identification runs whenever PLANTNET_API_KEY is configured, so this
- * banner is only shown when the app is running on built-in sample data. It
- * keeps that honest without claiming live identification is "coming later".
+ * Live identification requires explicit PLANTNET_MODE=live plus a valid
+ * server-only key; a key by itself never enables it. This banner is shown
+ * whenever the response used mock identification, keeping that honest
+ * without claiming live identification is "coming later".
  */
 export function MockDemoBanner() {
   return (
@@ -13,8 +14,9 @@ export function MockDemoBanner() {
     >
       <p className="font-semibold">Sample data — not a live identification</p>
       <p className="mt-1">
-        Live Pl@ntNet identification isn&apos;t enabled on this server right
-        now, so the matches below come from built-in sample data.
+        Live Pl@ntNet identification isn&apos;t active for these results — it
+        requires explicit opt-in and a valid server-side key — so the matches
+        below come from built-in sample data.
       </p>
     </div>
   );

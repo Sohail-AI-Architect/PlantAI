@@ -64,7 +64,7 @@ Three environments. Differences that actually matter:
 | **URL** | `http://localhost:3000` | `plantai-git-<branch>-<team>.vercel.app` | `plantai-<name>.vercel.app` → custom domain at Phase 5 |
 | **Supabase project** | `plantai-dev` (may pause between sessions — acceptable) | `plantai-dev` (same as local, so preview data matches local dev) | `plantai-prod` (kept awake by user traffic) |
 | **Storage buckets** | same schema/buckets recreated in dev project | n/a (uses dev project) | `plant-images` (public), `request-images` (private) |
-| **Pl@ntNet key** | shared free key, but app runs in **`PLANTNET_MODE=mock`** during development so no real API calls | shared free key, `PLANTNET_MODE=mock` (if a real test is needed, do it deliberately — see caution below) | shared free key, **real mode** |
+| **Pl@ntNet mode/key** | `PLANTNET_MODE=mock`; key may be present but no live calls | `PLANTNET_MODE=mock` even if a key is present; do not call the API | owner-approved `PLANTNET_MODE=live` + valid key; otherwise keep `mock` |
 | **`NEXT_PUBLIC_SITE_URL`** | `http://localhost:3000` | preview URL (set per branch in Vercel or computed) | production URL |
 | **Env var scope in Vercel** | `.env.local` (git-ignored) | "Preview" environment in Vercel dashboard | "Production" environment in Vercel dashboard |
 | **Auth redirect URLs** | `http://localhost:3000/**` in Supabase dashboard | each preview domain added to Supabase Auth redirect allowlist | `https://<prod-domain>/**` |
@@ -76,9 +76,9 @@ Three environments. Differences that actually matter:
 Dev, preview and prod **SHARE the same 500/day key** (`docs/VERIFIED_FACTS.md` §Pl@ntNet: quota is per account/day). Creating a second free account is **NOT an option — Pl@ntNet terms allow one free account per person and forbid multiple free accounts submitting from the same IP** (`docs/VERIFIED_FACTS.md` §Pl@ntNet, Account rules).
 
 **Decision:**
-- **Prod owns the free key** (`my.plantnet.org` — create one account, one key, server-side only).
-- **Dev and preview use the same key but in `PLANTNET_MODE=mock`** — an env flag that makes the `/identify` endpoint return canned fixture responses (saved sample Pl@ntNet JSON from `TESTING_PLAN.md` fixtures) instead of calling the API. Zero quota consumed normally.
-- When a **real** dev-time identification is genuinely needed (e.g. verifying parsing against live data), set `PLANTNET_MODE=real` temporarily in `.env.local`, run 1–2 calls, then switch back. Log `remainingIdentificationRequests` from each real response to track remaining daily quota (route + header detail in `docs/VERIFIED_FACTS.md` §Pl@ntNet).
+- **Prod owns the free key** (`my.plantnet.org` — create one account, one key, server-side only). A key alone never enables live identification.
+- **Dev and preview use `PLANTNET_MODE=mock`** — the `/identify` endpoint returns canned fixture responses (saved sample Pl@ntNet JSON from `TESTING_PLAN.md` fixtures) instead of calling the API. Missing, blank or invalid mode also defaults to mock, even when a key is present. Zero quota consumed normally.
+- When a **live** dev-time identification is genuinely needed (e.g. verifying parsing against live data), temporarily set **both** `PLANTNET_MODE=live` and a valid server-only `PLANTNET_API_KEY`, run 1–2 calls, then switch back to `PLANTNET_MODE=mock`. Log `remainingIdentificationRequests` from each live response to track remaining daily quota (route + header detail in `docs/VERIFIED_FACTS.md` §Pl@ntNet). Production live activation requires separate owner approval.
 - Response **headers on 429**: quota resets at midnight UTC. If prod ever returns 429 in production, log and surface a friendly "daily limit reached — try tomorrow" state instead of an error.
 - **Client-side validation happens BEFORE** calling Pl@ntNet: since 2026-02-13, errored identify requests **also consume 1 credit** on the free plan (`docs/VERIFIED_FACTS.md` §Pl@ntNet). Validate image count (1–5 images, same plant), file type (`image/jpeg` / `image/png`), and total POST size ≤ 50 MB server-side before proxying.
 
@@ -183,7 +183,7 @@ For each var defined in §6, pick one of three scopes in the Vercel "Environment
 | Scope | Applies to | PlantAI usage |
 |---|---|---|
 | **Production** | the `plantai-<name>.vercel.app` site ( deployments from `main`) | real Supabase prod keys, real Pl@ntNet key, prod `NEXT_PUBLIC_SITE_URL` |
-| **Preview** | every PR preview URL | `plantai-dev` Supabase keys, `PLANTNET_MODE=mock`, preview-appropriate URL |
+| **Preview** | every PR preview URL | `plantai-dev` Supabase keys, `PLANTNET_MODE=mock` even if a key is present, preview-appropriate URL |
 | **Development** | only used if running `vercel dev` locally — NOT used for plain `npm run dev` | generally unused; `.env.local` rules locally instead |
 
 Per-branch overrides (e.g. a different `NEXT_PUBLIC_SITE_URL` for a feature branch preview) are done via the target-branch field on each env-var entry.
@@ -276,8 +276,8 @@ Canonical names (do not rename — every doc uses these; see also `ENVIRONMENT_S
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Project Settings → API → Project URL | ✅ YES (anon traffic needs it to reach auth/storage) | dev project URL | dev project URL | prod project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase dashboard → Project Settings → API → **Publishable key** (new naming, ADR-9 2026-11-10; the doc's earlier "anon key" row refers to the same credential) | ✅ YES (by design — RLS is the real security boundary, `SECURITY.md`) | dev project publishable key | dev project publishable key | prod publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API → `service_role` | ❌ NO — **server only, never `NEXT_PUBLIC_`-prefixed** | dev project service-role key (careful with it locally) | dev project service-role key (or omit if preview flow never needs it) | prod project service-role key |
-| `PLANTNET_API_KEY` | your `my.plantnet.org` account (one account per person — `docs/VERIFIED_FACTS.md` §Pl@ntNet) — free plan, 500/day | ❌ NO — **server only** | optional locally (empty = sample data) | omit to keep previews on sample data | **the free key used by prod (enables live identification)** |
-| `PLANTNET_MODE` | Optional legacy flag; live mode is enabled by `PLANTNET_API_KEY` alone | ❌ NO (server-only behavior flag) | unset | unset | unset |
+| `PLANTNET_API_KEY` | your `my.plantnet.org` account (one account per person — `docs/VERIFIED_FACTS.md` §Pl@ntNet) — free plan, 500/day | ❌ NO — **server only** | optional locally (empty = sample data; key alone never enables live) | optional, but keep mode `mock` to avoid live calls | valid free key; live only when paired with `PLANTNET_MODE=live` |
+| `PLANTNET_MODE` | Explicit `live` / `mock` switch; missing, blank or invalid defaults to `mock`, and `mock` wins even with a key | ❌ NO (server-only behavior flag) | `mock` | `mock` | `mock` until separately approved; `live` only with a valid key |
 | *(Phase-5+)* `RESEND_API_KEY` etc. | any transactional email/paid service | ❌ NO | — | — | as needed |
 
 ### 6.2 Exposure rules (critical)
@@ -289,7 +289,7 @@ Canonical names (do not rename — every doc uses these; see also `ENVIRONMENT_S
 ### 6.3 How `.env.local` mirrors Vercel
 
 - `.env.local` (git-ignored per §3.2) holds local values identical to the "Development" ones used locally, with `NEXT_PUBLIC_SUPABASE_URL`+keys pointing at **`plantai-dev`**.
-- Default `PLANTNET_MODE=mock` in `.env.local` so day-to-day dev doesn't burn the shared daily quota.
+- Default `PLANTNET_MODE=mock` in `.env.local` so day-to-day dev doesn't burn the shared daily quota; an API key by itself never enables live mode.
 - `.env.example` (committed) mirrors var names with placeholder values + comments.
 - When a variable is added/renamed, update **all three** in one commit: `.env.example`, `.env.local` locally, and the Vercel dashboard entries for Preview + Production scopes.
 
@@ -311,7 +311,7 @@ Pre-flight — run top to bottom the day before / of enabling production traffic
 | 8 | `robots.txt` serves and allows production crawling | `curl`/browser: `https://<prod-url>/robots.txt` | ✅ yes (SEO-blocking otherwise, see `SEO_STRATEGY.md`) |
 | 9 | `sitemap.xml` reachable and lists current routes | `https://<prod-url>/sitemap.xml` | ✅ yes |
 | 10 | Security headers configured (CSP, X-Frame-Options, Referrer-Policy, etc.) | deployed response headers via `curl -I` or the Vercel dashboard; full header list lives in `SECURITY.md` | ✅ yes |
-| 11 | `/identify` smoke-tested **in mock mode first** then **1 real call** | deploy preview with `PLANTNET_MODE=mock` → verify; then flip prod var and do a single real identification; record `remainingIdentificationRequests` from the response | ✅ yes |
+| 11 | `/identify` smoke-tested **in mock mode first** | deploy preview with `PLANTNET_MODE=mock` → verify sample-data response. Live check only after separate owner approval: set both `PLANTNET_MODE=live` and a valid server-only key, then do a single live identification and record `remainingIdentificationRequests` | ✅ yes |
 | 12 | Supabase prod project not paused, activity will be regular (real users) | dashboard status | ✅ yes |
 | 13 | Error-monitoring plan noted | For MVP: **Vercel runtime logs only**. Log retention on Hobby is **UNVERIFIED** in `docs/VERIFIED_FACTS.md` — assume very short retention (hours), so treat logs as "look now, not later". If a longer lookback is needed at $0, a free-tier third-party (e.g. Sentry free tier) is the Phase-3+ option — add to `TASKS.md` when needed | — |
 

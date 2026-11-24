@@ -15,7 +15,7 @@ TypeScript, Supabase and Pl@ntNet integration.
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3.3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres_Auth_Storage-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![Netlify](https://img.shields.io/badge/hosted_on-Netlify_Free-00C7B7?logo=netlify&logoColor=white)](https://www.netlify.com/)
-[![Tests](https://img.shields.io/badge/tests-197_passing-22C55E)](TESTING_PLAN.md)
+[![Tests](https://img.shields.io/badge/tests-243_passing-22C55E)](TESTING_PLAN.md)
 
 **AI plant identification · Plant recognition · Houseplant care · Gardening technology**
 
@@ -155,12 +155,14 @@ view:
 7. **Output** — ranked species suggestions with scores, plus attribution and
    service metadata.
 
-Enabling live identification requires a single server-only variable:
-`PLANTNET_API_KEY` (from `my.plantnet.org → settings → API key`). When it is
-present the app uses the live Pl@ntNet provider; when it is missing or blank
-the API returns a clean "not available right now" response in production, and
-local development/test falls back to deterministic sample data. See
-[`AI_INTEGRATION_PLAN.md`](AI_INTEGRATION_PLAN.md) and
+Enabling live identification requires an explicit opt-in with **both**
+`PLANTNET_MODE=live` and a valid server-only `PLANTNET_API_KEY` (from
+`my.plantnet.org → settings → API key`). An API key by itself **never** enables
+live identification: missing, blank or invalid `PLANTNET_MODE` defaults to mock,
+and an existing key with mock/unset mode still uses deterministic sample data.
+In production, a missing key returns a clean "not available right now"
+response. Live activation is owner-gated and must not be enabled without
+separate approval. See [`AI_INTEGRATION_PLAN.md`](AI_INTEGRATION_PLAN.md) and
 [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md).
 
 ---
@@ -201,7 +203,7 @@ the bundled registry acts as a verified fallback display source.
 | Database & Auth | Supabase (PostgreSQL, Auth, Storage) |
 | Identification | Pl@ntNet-compatible provider pipeline (mock default) |
 | Validation | Zod |
-| Testing | Vitest — 197 passing tests |
+| Testing | Vitest — 243 passing tests |
 | Linting / Formatting | ESLint 9 (flat config) + Prettier |
 | Hosting | Netlify Free (OpenNext-based Next.js runtime) |
 
@@ -288,9 +290,9 @@ commit `.env.local`** — it is already excluded via `.gitignore`.
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (publishable) |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable (anon) key for browser clients |
 | `SUPABASE_SECRET_KEY` | Server-only Supabase secret key |
-| `PLANTNET_API_KEY` | Server-only Pl@ntNet API key — set it to enable live identification |
-| `PLANTNET_MODE` | Optional; only used to warn when set to `live` without a key |
-| `PLANTAI_PERSISTENCE_ENABLED` | `OFF` (default) or `true` — persistence gate |
+| `PLANTNET_API_KEY` | Server-only Pl@ntNet API key; required for live mode but never sufficient alone |
+| `PLANTNET_MODE` | `mock` or `live`; missing/blank/invalid defaults to `mock`, and `mock` wins even with a key. Live requires both `live` + a valid key |
+| `PLANTAI_PERSISTENCE_ENABLED` | `OFF` (default) or exact `true` — writes only when exactly `true`; keep `OFF` unless owner approves |
 | `IP_HASH_SALT` | Salt for privacy-preserving IP hashing in rate limiting |
 
 Step-by-step guidance, including where each Supabase value comes from, is in
@@ -313,8 +315,10 @@ auto-detects Next.js and installs its official adapter.
    scope: all scopes) **before** the build that goes public — the Supabase
    URL is consumed at build time for the Content-Security-Policy. Use the
    [Environment Variables](#environment-variables) table; for production set
-   `NEXT_PUBLIC_SITE_URL` to the final `*.netlify.app` URL and add
-   `PLANTNET_API_KEY` so `/identify` uses live Pl@ntNet results.
+   `NEXT_PUBLIC_SITE_URL` to the final `*.netlify.app` URL. Keep
+   `PLANTNET_MODE=mock` (or unset) so `/identify` uses sample data; a key alone
+   never enables live mode. Only with separate owner approval set both
+   `PLANTNET_MODE=live` and a valid server-only `PLANTNET_API_KEY`.
 4. **Deploy**, then trigger a fresh deploy after setting the final site URL.
 5. **Verify** post-deploy: HTTPS, all routes, `/robots.txt`, `/sitemap.xml`,
    security headers, and the identification flow.
@@ -416,12 +420,14 @@ Details and reporting guidance: [`SECURITY.md`](SECURITY.md).
 
 Additional verified facts:
 
-- The automated test suite currently counts **197 passing tests**
+- The automated test suite currently counts **243 passing tests**
   (`npm test`).
-- Live Pl@ntNet identification is used whenever `PLANTNET_API_KEY` is set.
-  Without it, production returns a clear "identification not available"
-  response instead of sample results. `PLANTAI_PERSISTENCE_ENABLED` stays
-  `OFF` unless explicitly enabled. **Sample data is never presented as a live
+- Live Pl@ntNet identification requires both `PLANTNET_MODE=live` and a valid
+  `PLANTNET_API_KEY`; a key by itself never enables live mode. Missing, blank
+  or invalid mode defaults to mock, and mock/unset mode with a key still uses
+  sample data. Without a key, production returns a clear "identification not
+  available" response. `PLANTAI_PERSISTENCE_ENABLED` stays `OFF` unless
+  explicitly enabled. **Sample data is never presented as a live
   identification.**
 - Database migrations 000–004 were applied to the development project;
   **migration 005 is pending** and its application status has not been

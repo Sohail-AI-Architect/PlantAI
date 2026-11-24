@@ -16,7 +16,8 @@ export const metadata: Metadata = {
  *
  * The auth context streams inside <Suspense> (verified claims read cookies —
  * runtime data under Cache Components, Next.js 16). Live Pl@ntNet
- * identification runs when PLANTNET_API_KEY is configured on the server.
+ * identification runs only when PLANTNET_MODE=live and a non-blank
+ * PLANTNET_API_KEY are configured; a key alone defaults to mock.
  */
 async function IdentifySection() {
   const auth = await getAuthContext();

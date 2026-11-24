@@ -30,7 +30,8 @@ import type {
 
 /**
  * POST /api/identify — the MVP's only Route Handler
- * (API_DOCUMENTATION.md §2; live Pl@ntNet when `PLANTNET_API_KEY` is set).
+ * (API_DOCUMENTATION.md §2; live Pl@ntNet only with `PLANTNET_MODE=live` and
+ * a non-blank server-only `PLANTNET_API_KEY`).
  *
  * Pipeline (§2.4):
  *   [1] body-size guard 413  →  [2] multipart parse 400
@@ -39,8 +40,8 @@ import type {
  *   →  [5] identity via verified claims (never client-declared headers)
  *   →  [6] rate limit (in-memory, honest per-instance semantics) 429
  *   →  [7] SHA-256 hash + dedup lookup 200 cached:true
- *   →  [8] provider identify (live Pl@ntNet, or a clean 503 when the server
- *           key is not configured in production)
+ *   →  [8] provider identify (live only with explicit mode + key; otherwise
+ *           mock, or a clean 503 in production when the key is missing)
  *   →  [9] normalize + confidence bands
  *   →  [10] careSummary from plant_library (published rows, session client)
  *   →  [11] persistence — WRITE CONTROL: automatic DB writes are disabled
@@ -279,10 +280,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Live identification is configuration-driven. In production, a missing
   // server key returns a clean service-unavailable response instead of fake
   // sample matches — and it does not consume the visitor's daily quota.
+  // With a key but mock/unset mode, mock results are returned with mockNotice;
+  // a key by itself never activates live mode.
   if (process.env.NODE_ENV === "production" && !getPlantnetApiKey()) {
     const peek = identifyLimiter.peek(limiterKey, limit);
     console.error(
-      "[identify] live identification is not configured: set the server-only PLANTNET_API_KEY to enable Pl@ntNet."
+      "[identify] live identification is not configured: set PLANTNET_MODE=live and a valid server-only PLANTNET_API_KEY to enable Pl@ntNet."
     );
     return errorResponse(
       503,
@@ -332,9 +335,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // [8] provider — live Pl@ntNet when PLANTNET_API_KEY is configured
-    // (production without a key already returned 503 above); development
-    // and tests use the deterministic mock provider.
+    // [8] provider — live Pl@ntNet only with PLANTNET_MODE=live plus a
+    // non-blank key (production without a key already returned 503 above).
+    // mock/unset mode uses the deterministic mock provider even when a key
+    // exists; development and tests stay on that path by default.
     const { mode, provider } = getProvider();
     const providerResult = await provider.identify({
       images: buffers,

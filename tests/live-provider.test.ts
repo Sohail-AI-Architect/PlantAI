@@ -462,15 +462,21 @@ describe("live provider redaction", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Provider seam wiring (mock-first)                                    */
+/* Provider seam wiring (explicit mock-first safety contract)            */
 /* ------------------------------------------------------------------ */
 
-describe("provider seam wiring (mock-first, live inactive)", () => {
-  it("mock mode (default) returns the MockProvider and never calls fetch", async () => {
+describe("provider seam wiring (explicit mock-first safety contract)", () => {
+  /** Any call here is a failure: mock mode must never reach the network. */
+  function stubThrowingFetch() {
     const fetchMock = vi.fn(async (): Promise<Response> => {
-      throw new Error("fetch must never be called in mock mode");
+      throw new Error("fetch must never be called on the mock path");
     });
     vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("missing mode + missing key defaults to mock and never calls fetch", async () => {
+    const fetchMock = stubThrowingFetch();
     const { mode, provider } = getProvider();
     expect(mode).toBe("mock");
     const out = await provider.identify(req("auto"));
@@ -479,14 +485,43 @@ describe("provider seam wiring (mock-first, live inactive)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("explicit mock + API key present selects mock and never calls fetch", async () => {
+    process.env.PLANTNET_MODE = "mock";
+    process.env.PLANTNET_API_KEY = DUMMY_KEY; // dummy only — never a real key
+    const fetchMock = stubThrowingFetch();
+    const { mode, provider } = getProvider();
+    expect(mode).toBe("mock");
+    const out = await provider.identify(req("auto"));
+    expect(out.sourceLabel).toBe("mock");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("missing mode + API key present selects mock and never calls fetch", async () => {
+    process.env.PLANTNET_API_KEY = DUMMY_KEY; // dummy only — never a real key
+    const fetchMock = stubThrowingFetch();
+    const { mode, provider } = getProvider();
+    expect(mode).toBe("mock");
+    const out = await provider.identify(req("auto"));
+    expect(out.sourceLabel).toBe("mock");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("invalid mode + API key present selects mock and never calls fetch", async () => {
+    process.env.PLANTNET_MODE = "not-a-valid-mode";
+    process.env.PLANTNET_API_KEY = DUMMY_KEY; // dummy only — never a real key
+    const fetchMock = stubThrowingFetch();
+    const { mode, provider } = getProvider();
+    expect(mode).toBe("mock");
+    const out = await provider.identify(req("auto"));
+    expect(out.sourceLabel).toBe("mock");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("PLANTNET_MODE=live without a key fails safe to mock with a diagnostic (fetch never called)", async () => {
     process.env.PLANTNET_MODE = "live";
     // PLANTNET_API_KEY intentionally unset.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const fetchMock = vi.fn(async (): Promise<Response> => {
-      throw new Error("fetch must never be called");
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubThrowingFetch();
     const { mode, provider } = getProvider();
     expect(mode).toBe("mock");
     await provider.identify(req("auto"));
@@ -506,7 +541,7 @@ describe("provider seam wiring (mock-first, live inactive)", () => {
     expect(logged).not.toContain("   "); // the value itself is never echoed
   });
 
-  it("PLANTNET_MODE=live with a valid-format key wires the live provider (still inactive without owner activation)", async () => {
+  it("PLANTNET_MODE=live + dummy key wires the live provider using mocked fetch only", async () => {
     process.env.PLANTNET_MODE = "live";
     process.env.PLANTNET_API_KEY = DUMMY_KEY; // dummy only — never a real key
     const fetchMock = vi.fn(async () =>
@@ -533,24 +568,14 @@ describe("provider seam wiring (mock-first, live inactive)", () => {
     expect(url.pathname).toBe("/v2/identify/all");
   });
 
-  it("PLANTNET_API_KEY alone (no PLANTNET_MODE) is enough to wire the live provider", async () => {
+  it("PLANTNET_API_KEY alone (no PLANTNET_MODE) now selects mock (fetch never called)", async () => {
     process.env.PLANTNET_API_KEY = DUMMY_KEY; // dummy only — never a real key
-    const fetchMock = vi.fn(async () =>
-      jsonResponse(200, {
-        results: [
-          {
-            score: 0.8,
-            species: { scientificNameWithoutAuthor: "Ficus lyrata" },
-          },
-        ],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubThrowingFetch();
     const { mode, provider } = getProvider();
-    expect(mode).toBe("live");
+    expect(mode).toBe("mock");
     const out = await provider.identify(req("auto"));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(out.topResult.species[0]?.scientificName).toBe("Ficus lyrata");
+    expect(out.sourceLabel).toBe("mock");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

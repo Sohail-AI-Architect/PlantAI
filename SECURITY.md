@@ -67,7 +67,7 @@ Canonical names are fixed in CANONICAL PROJECT DECISIONS #6. No name may be rena
    - Belt-and-braces: install `server-only` package and import it at the top of the Pl@ntNet proxy module and any service-role client module — an import from a Client Component then fails the build. (Approach UNVERIFIED against the Next.js major version chosen at scaffold; verify in Phase 1.)
    - Additional check in CI: grep the `.next` build for the literal values of secrets (see [`TESTING_PLAN.md`](TESTING_PLAN.md)).
    - No CORS domain whitelisting exists on the Pl@ntNet free plan to make client-side calls "allowed" safely — the key is simply private, period ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)).
-3. **`.env.example` (committed) contains placeholders only** — e.g. `PLANTNET_API_KEY=your_key_here` — plus comments on where to obtain each key. **`.env.local` (gitignored)** holds real values locally; production secrets live in Vercel project environment variables, never in the repo.
+3. **`.env.example` (committed) contains placeholders/empty values only** — e.g. `PLANTNET_MODE=mock` and an empty `PLANTNET_API_KEY=` (owner-managed value documented in comments, never checked in) — plus comments on where to obtain each key. **`.env.local` (gitignored)** holds real values locally; production secrets live in Vercel project environment variables, never in the repo.
 4. **Rotation procedure** (any key):
    1. Generate/obtain a new key at the provider (Supabase dashboard / my.plantnet.org).
    2. Update `.env.local` locally and Vercel environment variables.

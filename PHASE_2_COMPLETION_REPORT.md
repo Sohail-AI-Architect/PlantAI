@@ -27,7 +27,7 @@
 
 - **Mock provider** (`src/lib/plantnet/mock-provider.ts`): deterministic fixtures mirroring the 10 seeded `plant_library` species; result seeded from the combined SHA-256 of the image bytes (same input → same result); `sources:["mock"]` on every candidate; `images:[]` — mock never fabricates botanical imagery or CC citations.
 - **Transparency:** API `mode:"mock"` + `mockNotice:"Demo result — PlantAI testing mode. This is not a real AI identification."`; UI demo banner on `/identify` and in results. Verified in live responses.
-- **Provider seam:** `src/lib/plantnet/provider.ts` — the future `live-provider.ts` implements the same `identify()` signature; `PLANTNET_MODE=live` without owner approval/key throws instead of silently going live. No live Pl@ntNet call, key use, or quota consumption exists anywhere.
+- **Provider seam:** `src/lib/plantnet/provider.ts` — the future `live-provider.ts` implements the same `identify()` signature; live was not activated in Phase 2. *(Historical note: this report previously said `PLANTNET_MODE=live` without owner approval/key "throws instead of silently going live." Phase 1A correction, 2026-11-24: current code fails safely to mock with a generic diagnostic and zero network requests; no key value is logged.)* No live Pl@ntNet call, key use, or quota consumption exists anywhere.
 - **Care summary** resolution works identically in both modes (from our library), so the client never needs redesign when live mode activates.
 
 ## 3. Tests actually executed — PASSED (live contract tests against `npm run dev`, 2026-11-12)
