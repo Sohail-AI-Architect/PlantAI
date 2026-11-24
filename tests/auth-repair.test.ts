@@ -54,7 +54,9 @@ const submitGate = () => src("src/lib/auth/use-submit-gate.ts");
 describe("1. sign-in success", () => {
   it("calls Supabase password sign-in and navigates to the validated destination", () => {
     const source = codeOnly(login());
-    expect(source).toMatch(/supabase\.auth\.signInWithPassword\(\{/);
+    expect(source).toMatch(
+      /supabase\.auth\.signInWithPassword\(\s*buildPasswordSignInPayload\(/
+    );
     expect(source).toMatch(/router\.replace\(nextPath\)/);
     expect(source).toMatch(/router\.refresh\(\)/);
     expect(source).toMatch(/if \(signInError\)/);
@@ -114,7 +116,7 @@ describe("3. signup validation", () => {
 
   it("the form validates before any call and shows per-field accessible errors", () => {
     const source = signup();
-    expect(source).toMatch(/validateSignupFields\(\{ username, email, password, confirm \}\)/);
+    expect(source).toMatch(/validateSignupFields\(\{[\s\S]*?email: normalizedEmail/);
     expect(source).toMatch(/if \(Object\.keys\(errors\)\.length > 0\)/);
     expect(source).toMatch(/aria-invalid=/g);
     expect(source).toMatch(/aria-describedby=/g);

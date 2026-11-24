@@ -220,7 +220,7 @@ describe("PASSWORD_SIGN_IN_ERROR_MESSAGE — the single credential mapping", () 
 describe("login-form source contracts — sign-in success and safety wiring", () => {
   it("uses password sign-in and navigates to the validated next path", () => {
     const src = formSource();
-    expect(src).toMatch(/signInWithPassword\(\{/);
+    expect(src).toMatch(/signInWithPassword\(\s*buildPasswordSignInPayload\(/);
     expect(src).toMatch(/router\.replace\(nextPath\)/);
     expect(src).toMatch(/router\.refresh\(\)/);
     expect(src).toMatch(/safeAuthPath\(searchParams\.get\("next"\)\)/);
@@ -228,8 +228,23 @@ describe("login-form source contracts — sign-in success and safety wiring", ()
 
   it("validates BOTH submissions before any network call", () => {
     const src = formSource();
-    expect(src).toMatch(/isValidEmail\(email\.trim\(\)\)/g);
+    expect(src).toMatch(/isValidEmail\(normalizedEmail\)/g);
     expect(src).toMatch(/password\.length < 8/);
+  });
+
+  it("normalizes email with the shared helper and sends the password unchanged", () => {
+    const src = formSource();
+    expect(src).toMatch(/normalizeAuthEmail\(email\)/g);
+    expect(src).toMatch(/email: normalizedEmail/g);
+    expect(src).not.toMatch(/email:\s*username/);
+    expect(src).not.toMatch(/password\.(?:trim|toLowerCase|toUpperCase)\(/);
+  });
+
+  it("marks email as the browser login username, not the display name", () => {
+    const src = formSource();
+    expect(src).toMatch(/autoComplete="username"/);
+    expect(src).not.toMatch(/autoComplete="email"/);
+    expect(src).not.toMatch(/name="username"/);
   });
 
   it("guards duplicate submissions at handler level with an action-specific busy state", () => {

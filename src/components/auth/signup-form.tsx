@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   authLinkRedirectUrl,
+  buildSignUpPayload,
+  normalizeAuthEmail,
   safeAuthPath,
   signUpErrorMessage,
   validateSignupFields,
@@ -18,11 +20,15 @@ import { useSubmitGate } from "@/lib/auth/use-submit-gate";
  * Create-account form (FR-AUTH-001..003).
  *
  * Username, email, password and confirmation are validated before any
- * network call. Account creation is reported as successful ONLY when
- * Supabase returns success; the expected confirmation-required response
- * says exactly what the user must do next. Duplicate email and username
- * conflicts share one privacy-safe message. The temporary one-click
- * anonymous sign-in feature is not part of this flow.
+ * network call. The normalized email is Supabase Auth's identity; the
+ * display name is sent separately as `username` metadata for the existing
+ * profile trigger, and the password is sent unchanged. Browser autofill is
+ * told that email is the login identity and the display name is a nickname.
+ * Account creation is reported as successful ONLY when Supabase returns
+ * success; the expected confirmation-required response says exactly what
+ * the user must do next. Duplicate email and username conflicts share one
+ * privacy-safe message. The temporary one-click anonymous sign-in feature
+ * is not part of this flow.
  */
 export function SignupForm() {
   const router = useRouter();
@@ -51,7 +57,14 @@ export function SignupForm() {
     if (!begin()) return;
     setError(null);
 
-    const errors = validateSignupFields({ username, email, password, confirm });
+    const normalizedEmail = normalizeAuthEmail(email);
+    const normalizedUsername = username.trim();
+    const errors = validateSignupFields({
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password,
+      confirm,
+    });
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       finish();
@@ -60,20 +73,20 @@ export function SignupForm() {
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          // The browser client is PKCE by default; the emailed link must be
-          // exchanged by this browser on /auth/link. `next` is carried so
-          // "sign up to save this plant" returns to the right page.
+      // The browser client is PKCE by default; the emailed link must be
+      // exchanged by this browser on /auth/link. `next` is carried so
+      // "sign up to save this plant" returns to the right page.
+      const { data, error: signUpError } = await supabase.auth.signUp(
+        buildSignUpPayload({
+          username: normalizedUsername,
+          email: normalizedEmail,
+          password,
           emailRedirectTo: authLinkRedirectUrl(
             window.location.origin,
             nextPath
           ),
-          data: { username: username.trim() },
-        },
-      });
+        })
+      );
 
       if (signUpError) {
         setError(signUpErrorMessage(signUpError));
@@ -103,7 +116,8 @@ export function SignupForm() {
         <div className="bg-success/10 text-success rounded-md px-3 py-2 text-sm">
           <p className="font-semibold">Confirm your email</p>
           <p className="mt-1">
-            We sent a confirmation link to <strong>{email.trim()}</strong>.
+            We sent a confirmation link to{" "}
+            <strong>{normalizeAuthEmail(email)}</strong>.
             Open it on this device to activate your account — you&apos;ll be
             signed in automatically.
           </p>
@@ -139,11 +153,12 @@ export function SignupForm() {
           <label htmlFor="username" className="block text-sm font-medium">
             Username
           </label>
+          {/* The email, not this display name, is the Supabase auth username. */}
           <input
             id="username"
             name="username"
             type="text"
-            autoComplete="username"
+            autoComplete="nickname"
             required
             minLength={3}
             maxLength={24}
@@ -243,7 +258,7 @@ export function SignupForm() {
           <div className="relative">
             <input
               id="confirm-password"
-              name="confirm-password"
+              name="confirmPassword"
               type={showConfirm ? "text" : "password"}
               autoComplete="new-password"
               required

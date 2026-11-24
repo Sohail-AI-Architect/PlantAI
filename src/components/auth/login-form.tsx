@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   authLinkRedirectUrl,
+  buildPasswordSignInPayload,
+  normalizeAuthEmail,
   safeAuthPath,
   withAuthNext,
 } from "@/lib/auth/auth-contracts";
@@ -30,6 +32,8 @@ import {
  *   with honest wait guidance for rate limits;
  * - `?next=` is validated as a same-origin path and carried through emailed
  *   links so "sign in to save this plant" returns to the right page;
+ * - the normalized email is the only account identity; no display name is
+ *   accepted, and browser password managers see it as the username;
  * - the temporary one-click anonymous sign-in flow has been removed — every
  *   session is a normal Supabase email/password or magic-link session.
  */
@@ -83,7 +87,8 @@ export function LoginForm() {
     setError(null);
     setInfo(null);
 
-    if (!isValidEmail(email.trim()) || password.length < 8) {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!isValidEmail(normalizedEmail) || password.length < 8) {
       setError("Enter a valid email address and an 8+ character password.");
       finish();
       return;
@@ -91,10 +96,9 @@ export function LoginForm() {
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      const { error: signInError } = await supabase.auth.signInWithPassword(
+        buildPasswordSignInPayload({ email: normalizedEmail, password })
+      );
       if (signInError) {
         // Deliberately vague for credential failures: wrong password,
         // unknown address and unconfirmed email are indistinguishable.
@@ -118,7 +122,8 @@ export function LoginForm() {
     setError(null);
     setInfo(null);
 
-    if (!isValidEmail(email.trim())) {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!isValidEmail(normalizedEmail)) {
       setError("Enter a valid email address to receive a sign-in link.");
       finish();
       return;
@@ -127,7 +132,7 @@ export function LoginForm() {
     try {
       const supabase = createSupabaseBrowserClient();
       const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
+        email: normalizedEmail,
         options: {
           // The PKCE code_verifier lives in this browser, so the emailed link
           // must land on the client-side exchange page, never /auth/confirm.
@@ -157,7 +162,8 @@ export function LoginForm() {
     setError(null);
     setInfo(null);
 
-    if (!isValidEmail(email.trim())) {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!isValidEmail(normalizedEmail)) {
       setError("Enter a valid email address to resend a confirmation email.");
       finish();
       return;
@@ -167,7 +173,7 @@ export function LoginForm() {
       const supabase = createSupabaseBrowserClient();
       const { error: resendError } = await supabase.auth.resend({
         type: "signup",
-        email: email.trim(),
+        email: normalizedEmail,
         options: {
           emailRedirectTo: authLinkRedirectUrl(
             window.location.origin,
@@ -234,11 +240,12 @@ export function LoginForm() {
           <label htmlFor="email" className="block text-sm font-medium">
             Email
           </label>
+          {/* Email is the authentication username for browser password managers. */}
           <input
             id="email"
             name="email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -305,10 +312,11 @@ export function LoginForm() {
       {signInFailed && !resendSent && (
         <div className="border-border-muted bg-surface-muted rounded-lg border p-4 text-sm">
           <p className="font-medium">
-            Just signed up and still waiting on the confirmation email?
+            Did your sign-up email still need confirming?
           </p>
           <p className="text-foreground-muted mt-1">
-            We can send a fresh confirmation link to the address above.
+            We can send a fresh confirmation link to the address above. If your
+            account is already confirmed, use Forgot password below instead.
           </p>
           <button
             type="button"

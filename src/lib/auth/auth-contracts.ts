@@ -29,6 +29,62 @@ export interface SignupFields {
   confirm: string;
 }
 
+/**
+ * The single email-normalization rule for auth forms: trim surrounding
+ * whitespace and lowercase the address before validation or Supabase calls.
+ * Password values are deliberately never passed through this helper.
+ */
+export function normalizeAuthEmail(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+/** Payload contracts shared by the signup and password sign-in forms. */
+export interface SignUpPayload {
+  email: string;
+  password: string;
+  options: {
+    emailRedirectTo: string;
+    data: { username: string };
+  };
+}
+
+export interface PasswordSignInPayload {
+  email: string;
+  password: string;
+}
+
+/**
+ * Public registration is open to any valid email address. The caller's email
+ * is the only Auth identity; the display name lives in `options.data` for the
+ * existing profile trigger. Nothing here consults an owner address or domain.
+ */
+export function buildSignUpPayload(input: {
+  username: string;
+  email: string;
+  password: string;
+  emailRedirectTo: string;
+}): SignUpPayload {
+  return {
+    email: normalizeAuthEmail(input.email),
+    password: input.password,
+    options: {
+      emailRedirectTo: input.emailRedirectTo,
+      data: { username: input.username.trim() },
+    },
+  };
+}
+
+/** Password sign-in uses the same visitor-supplied email, never a display name. */
+export function buildPasswordSignInPayload(input: {
+  email: string;
+  password: string;
+}): PasswordSignInPayload {
+  return {
+    email: normalizeAuthEmail(input.email),
+    password: input.password,
+  };
+}
+
 export function isValidUsername(raw: string): boolean {
   return USERNAME_PATTERN.test(raw);
 }
@@ -39,7 +95,7 @@ export function validateSignupFields(fields: SignupFields): SignupFieldErrors {
   if (!isValidUsername(fields.username.trim())) {
     errors.username = "3–24 characters; letters, numbers and underscores only.";
   }
-  if (!/^\S+@\S+\.\S+$/.test(fields.email.trim())) {
+  if (!/^\S+@\S+\.\S+$/.test(normalizeAuthEmail(fields.email))) {
     errors.email = "Enter a valid email address.";
   }
   if (fields.password.length < MIN_PASSWORD_LENGTH) {
