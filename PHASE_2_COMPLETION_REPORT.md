@@ -5,6 +5,8 @@
 > **Owner authorization:** Phase 2 implementation only (explicit). Phase 3 NOT started; awaiting owner approval.
 > **Scope discipline:** no DB schema/migration/grant/RLS changes, no Dashboard changes, no admin account, no persistent DB records, no deploys, no pushes, no paid services, no live Pl@ntNet calls, no disease AI.
 
+> **Current-state note (2026-11-24):** the auth row below is a historical Phase 2 record. Normal-use UI is now direct Supabase Google OAuth with PKCE/SSR cookies; email/password, magic-link and recovery UI were removed from normal use, while `/auth/confirm` and `/auth/link` remain for rollback. See `CHANGELOG.md` [Unreleased] and `docs/GOOGLE_OAUTH_SETUP.md`.
+
 ---
 
 ## 1. Fully implemented (real working code, verified)

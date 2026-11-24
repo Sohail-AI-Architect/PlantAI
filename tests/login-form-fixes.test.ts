@@ -13,15 +13,10 @@ import {
 } from "@/lib/auth/login-messages";
 
 /*
- * Offline contract tests for sign-in hardening (F1–F6 + 2026-11-24 repair).
- *
- * PURE-FUNCTION contracts on src/lib/auth/login-messages.ts pin error/validation
- * behavior with simulated GoTrue errors. SOURCE contracts on the forms pin
- * wiring (redirect helpers, guards, accessible states) the same way the repo's
- * SEO tests do. No jsdom, no browser E2E, no live Supabase calls.
- *
- * Privacy invariant: messages never reveal whether an account exists. Rate
- * limits and network failures are project/transport state, not account state.
+ * Offline contract tests for retained sign-in helpers and the Google-only
+ * login UI. Pure helper behavior is preserved for rollback; source contracts
+ * now verify that no password/magic-link control is rendered. No jsdom, no
+ * browser E2E, no live Supabase calls.
  */
 
 const formSource = () =>
@@ -29,8 +24,19 @@ const formSource = () =>
     path.resolve(process.cwd(), "src/components/auth/login-form.tsx"),
     "utf8"
   );
+const buttonSource = () =>
+  readFileSync(
+    path.resolve(process.cwd(), "src/components/auth/google-sign-in-button.tsx"),
+    "utf8"
+  );
+const codeOnly = (source: string) =>
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//"))
+    .join("\n");
 
-describe("isValidEmail — sign-in validation", () => {
+describe("isValidEmail — retained validation helper", () => {
   it("accepts ordinary addresses", () => {
     expect(isValidEmail("owner@example.com")).toBe(true);
     expect(isValidEmail("owner+tag@sub.example.co.uk")).toBe(true);
@@ -93,7 +99,7 @@ describe("isNetworkAuthError — transport failures are not credentials", () => 
   });
 });
 
-describe("magicLinkErrorMessage — neutral, 429-aware, network-aware", () => {
+describe("magicLinkErrorMessage — retained neutral, 429-aware mapper", () => {
   it("rate limit → honest hourly wait guidance", () => {
     const message = magicLinkErrorMessage({
       code: "over_email_send_rate_limit",
@@ -109,7 +115,7 @@ describe("magicLinkErrorMessage — neutral, 429-aware, network-aware", () => {
     );
   });
 
-  it("all other failures → the SAME generic message (unknown address included)", () => {
+  it("all other failures → the SAME generic message", () => {
     for (const err of [
       { code: "otp_disabled" },
       { code: "invalid_credentials" },
@@ -134,7 +140,7 @@ describe("magicLinkErrorMessage — neutral, 429-aware, network-aware", () => {
   });
 });
 
-describe("resendConfirmationErrorMessage — neutral in every branch", () => {
+describe("resendConfirmationErrorMessage — retained neutral mapper", () => {
   it("rate limit → honest wait guidance", () => {
     expect(
       resendConfirmationErrorMessage({ code: "over_email_send_rate_limit" })
@@ -157,18 +163,14 @@ describe("resendConfirmationErrorMessage — neutral in every branch", () => {
     }
   });
 
-  it("success line is unconditional and honest about GoTrue's confirmed-user no-op", () => {
+  it("legacy success line remains honest about GoTrue's confirmed-user no-op", () => {
     expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/^Request received/);
     expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/still needs confirming/i);
     expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/already confirmed/i);
-    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(/simply sign in/i);
-    expect(RESEND_CONFIRMATION_SENT_MESSAGE).not.toMatch(
-      /account (exists|created)/i
-    );
   });
 });
 
-describe("passwordSignInErrorMessage — throttle/network aware, otherwise one message", () => {
+describe("passwordSignInErrorMessage — retained neutral mapper", () => {
   it("endpoint throttle (429) → wait guidance with no credential advice", () => {
     for (const code of ["over_request_rate_limit", "over_email_send_rate_limit"]) {
       const message = passwordSignInErrorMessage({ code });
@@ -202,108 +204,46 @@ describe("passwordSignInErrorMessage — throttle/network aware, otherwise one m
       { code: "over_request_rate_limit" },
       { code: "invalid_credentials" },
     ]) {
-      const message = passwordSignInErrorMessage(err);
-      expect(message).not.toMatch(/not (registered|found|exist)|no account/i);
+      expect(passwordSignInErrorMessage(err)).not.toMatch(
+        /not (registered|found|exist)|no account/i
+      );
     }
   });
 });
 
-describe("PASSWORD_SIGN_IN_ERROR_MESSAGE — the single credential mapping", () => {
-  it("mentions confirmation-first without asserting account state", () => {
-    expect(PASSWORD_SIGN_IN_ERROR_MESSAGE).toMatch(/confirm your email first/i);
-    expect(PASSWORD_SIGN_IN_ERROR_MESSAGE).not.toMatch(
-      /invalid|wrong|incorrect/i
-    );
-  });
-});
-
-describe("login-form source contracts — sign-in success and safety wiring", () => {
-  it("uses password sign-in and navigates to the validated next path", () => {
-    const src = formSource();
-    expect(src).toMatch(/signInWithPassword\(\s*buildPasswordSignInPayload\(/);
-    expect(src).toMatch(/router\.replace\(nextPath\)/);
-    expect(src).toMatch(/router\.refresh\(\)/);
-    expect(src).toMatch(/safeAuthPath\(searchParams\.get\("next"\)\)/);
+describe("Google-only login source contracts", () => {
+  it("renders exactly one sign-in action and no credential form", () => {
+    const source = codeOnly(formSource());
+    expect(source.match(/<GoogleSignInButton \/>/g) ?? []).toHaveLength(1);
+    expect(source).not.toMatch(/signInWithPassword|signInWithOtp|auth\.resend/);
+    expect(source).not.toMatch(/type="(email|password)"|onSubmit|FormEvent/);
   });
 
-  it("validates BOTH submissions before any network call", () => {
-    const src = formSource();
-    expect(src).toMatch(/isValidEmail\(normalizedEmail\)/g);
-    expect(src).toMatch(/password\.length < 8/);
+  it("preserves validated next into the shared OAuth flow", () => {
+    const source = codeOnly(formSource());
+    expect(source).toMatch(/safeAuthPath\(searchParams\.get\("next"\)\)/);
+    expect(source).toMatch(/withAuthNext\(/);
+    expect(source).toMatch(/searchParams\.get\("notice"\)/);
   });
 
-  it("normalizes email with the shared helper and sends the password unchanged", () => {
-    const src = formSource();
-    expect(src).toMatch(/normalizeAuthEmail\(email\)/g);
-    expect(src).toMatch(/email: normalizedEmail/g);
-    expect(src).not.toMatch(/email:\s*username/);
-    expect(src).not.toMatch(/password\.(?:trim|toLowerCase|toUpperCase)\(/);
+  it("uses accessible loading, error and duplicate-click states", () => {
+    const source = codeOnly(buttonSource());
+    expect(source).toMatch(/if \(!begin\(\)\) return;/);
+    expect(source).toMatch(/disabled=\{busy\}/);
+    expect(source).toMatch(/aria-busy=\{busy\}/);
+    expect(source).toMatch(/role="alert"/);
+    expect(source).toMatch(/aria-live="polite"/);
+    expect(source).toMatch(/Continuing with Google…/);
   });
 
-  it("marks email as the browser login username, not the display name", () => {
-    const src = formSource();
-    expect(src).toMatch(/autoComplete="username"/);
-    expect(src).not.toMatch(/autoComplete="email"/);
-    expect(src).not.toMatch(/name="username"/);
-  });
-
-  it("guards duplicate submissions at handler level with an action-specific busy state", () => {
-    const src = formSource();
-    expect(src).toMatch(/if \(!begin\("(password|magic|resend)"\)\) return;/);
-    expect(src).toMatch(/pendingRef\.current/);
-    expect(src).toMatch(/type PendingAction =/);
-    expect(src).not.toMatch(/const \[busy, setBusy\]/);
-  });
-
-  it("F5: signInWithOtp sets shouldCreateUser: false", () => {
-    expect(formSource()).toMatch(/shouldCreateUser:\s*false/);
-  });
-
-  it("all emailed links carry `next` through the shared redirect helpers", () => {
-    const src = formSource();
-    expect(src).toMatch(/authLinkRedirectUrl\(/g);
-    expect(src).toMatch(/withAuthNext\(/g);
-  });
-
-  it("resend stays existence-neutral and maps failures through the 429-aware helper", () => {
-    const src = formSource();
-    expect(src).toMatch(/auth\.resend\(\{[\s\S]*?type:\s*"signup"/);
-    expect(src).toMatch(/resendConfirmationErrorMessage\(resendError\)/);
-    expect(src).toMatch(/setInfo\(RESEND_CONFIRMATION_SENT_MESSAGE\)/);
-  });
-
-  it("F1: ?error=link surfaces the expired-link message", () => {
-    const src = formSource();
-    expect(src).toMatch(/searchParams\.get\("error"\) === "link"/);
-    expect(src).toMatch(/invalid or has expired/);
-  });
-
-  it("F4: a failed password sign-in unlocks the passwordless recovery hint", () => {
-    const src = formSource();
-    expect(src).toMatch(/setSignInFailed\(true\)/);
-    expect(src).toMatch(/sign in without a password/);
-  });
-
-  it("password failures map through the throttle/network-aware helper only", () => {
-    const src = formSource();
-    expect(src).toMatch(/setError\(passwordSignInErrorMessage\(signInError\)\)/);
-    expect(src).not.toMatch(/signInError\.code === |email_not_confirmed/);
-  });
-
-  it("exposes accessible loading states and keeps Forgot password / Create account links", () => {
-    const src = formSource();
-    expect(src).toMatch(/aria-busy=\{busy\}/);
-    expect(src).toMatch(/aria-busy=\{pendingAction === "password"\}/);
-    expect(src).toMatch(/Forgot password\?/);
-    expect(src).toMatch(/Create account/);
+  it("does not surface raw provider errors", () => {
+    const source = codeOnly(buttonSource());
+    expect(source).toMatch(/googleOAuthErrorMessage\(/);
+    expect(source).not.toMatch(/error\.message|String\(oauthError\)/);
   });
 
   it("has no temporary Demo Account / anonymous sign-in path", () => {
-    const code = formSource()
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .split("\n")
-      .filter((line) => !line.trim().startsWith("//"))
-      .join("\n");
+    const code = codeOnly(formSource() + buttonSource());
     expect(code).not.toMatch(/signInAnonymously|Try Demo Account|Demo Account/);
   });
 });

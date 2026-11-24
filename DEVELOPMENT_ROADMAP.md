@@ -79,6 +79,8 @@ Key rule: the repo is expected to be deployable at the end of every phase (verti
 
 ## 3. Phase 1 — Environment & Project Scaffold
 
+> **Current auth status (2026-11-24):** the phase rows below are historical planning records. Normal-use UI is now direct Supabase Google OAuth with PKCE/SSR cookies; Email remains enabled for rollback; no Firebase/custom identity bridge exists. Owner provider configuration and real Google E2E are pending (`docs/GOOGLE_OAUTH_SETUP.md`).
+
 - **Goal:** clean, deployed skeleton: Next.js + TS strict + Tailwind + Supabase connection, canonical folder layout, canonical URL routes stubbed.
 - **Prerequisites:** M0 (user-approved docs); local tools installed per ENVIRONMENT_SETUP.md.
 
@@ -87,7 +89,7 @@ Key rule: the repo is expected to be deployable at the end of every phase (verti
 | 1.1 | Install/verify Node LTS (verify current LTS live — **UNVERIFIED** at planning time), Git, VS Code, OpenCode per ENVIRONMENT_SETUP.md | — | FR-TEC-002 | S |
 | 1.2 | Scaffold Next.js App Router + TypeScript (strict) + Tailwind project (exact commands live in ENVIRONMENT_SETUP.md, not here) | 1.1 | FR-TEC-001 | S |
 | 1.3 | Establish folder structure per ARCHITECTURE.md (`app/(routes)`, lib, components, supabase) and shared layout/footer with canonical nav links | 1.2 | FR-TEC-006 | S |
-| 1.4 | Create Supabase project; apply migration 0001 from DATABASE_SCHEMA.md (profiles, app_settings first slice); configure auth providers (email/password + magic link) | 1.2 | FR-TEC-004, FR-AUTH-* | M |
+| 1.4 | Create Supabase project; apply migration 0001 from DATABASE_SCHEMA.md (profiles, app_settings first slice); configure auth providers (Google for normal use per `docs/GOOGLE_OAUTH_SETUP.md`; Email retained for rollback) | 1.2 | FR-TEC-004, FR-AUTH-* | M |
 | 1.5 | Env vars wiring per FR-TEC-005 list (values only in ENVIRONMENT_SETUP.md); server/client separation enforced | 1.4 | NFR-S-001 | S |
 | 1.6 | Stub all canonical routes (canonical decision #7) with minimal pages + footer links | 1.3 | FR-TEC-006 | S |
 | 1.7 | Lint/format config (TS strict, ESLint, Prettier), CI-lite (typecheck + lint on push) | 1.2 | NFR-B-003 | S |
@@ -117,7 +119,7 @@ action by design. Full results: `PHASE_1_COMPLETION_REPORT.md`.
 | 2.2 | `/api/identify` Route Handler: server validation, streaming proxy to Pl@ntNet v2 (subset: 1 image), typed errors; key server-only | 2.1 scaffold | FR-ID-001, FR-UP-004, NFR-S-001 | L |
 | 2.3 | Rate limiting (anon 5/user 20 per day; `app_settings`-driven) + counters storage | 2.2, 1.4 | FR-ID-002/007 | M |
 | 2.4 | Image-hash dedup cache (+ `identification_cache` if adopted) | 2.2 | FR-ID-003 | M |
-| 2.5 | Auth flows: signup, verify, magic link, reset, logout, profile trigger, header state | 1.4 | FR-AUTH-001..007 | M |
+| 2.5 | Auth flows: Google sign-in/out via PKCE + SSR callback, validated `next`, profile trigger, header state; legacy email callbacks retained for rollback | 1.4 | FR-AUTH-001..008 | M |
 | 2.6 | Results UI: top-3 + confidence bars + images/attributions + care summary slot + save nudge | 2.2 | FR-RES-001..006 | M |
 | 2.7 | State design implementation: loading, quota-reached (internal + Pl@ntNet 429), degraded/error (AI_INTEGRATION_PLAN matrix) | 2.2–2.4 | FR-ID-004..006, NFR-R-001 | M |
 | 2.8 | Attribution component (Pl@ntNet sentence + "Powered by Pl@ntNet" + CC-BY-SA captions) reused sitewide | 2.6 VERIFIED_FACTS | FR-ID-008, FR-BIZ-002 | S |
@@ -172,7 +174,7 @@ action by design. Full results: `PHASE_1_COMPLETION_REPORT.md`.
 | 4.6 | `/account` profile + logout + deletion-request path | 2.5 | FR-ACC-001 | S |
 | 4.7 | Admin: role bootstrap SQL (SECURITY.md), guarded `/admin` shell | 3.1 | FR-ADMIN-001/006 | M |
 | 4.8 | Admin moderation: plant library & blog publish/unpublish + contact inbox + identifications abuse view | 4.7, 2.3 | FR-ADMIN-002..005 | L |
-| 4.9 | Optional: Google OAuth (explicit choice, default skip) | 2.5 | FR-FUT-005 | S |
+| 4.9 | Google OAuth cutover to the single normal-use action (code complete locally; owner provider config + real E2E pending) | 2.5 | FR-AUTH-001..008 | S |
 | 4.10 | RLS re-audit + TESTING_PLAN §4 execution | all | AC-NFR-4 | M |
 
 **Exit criteria (M4):** all Tier-3 flows pass tests; RLS re-audited; admin cannot be reached by `role='user'`; CHANGELOG updated.
@@ -223,7 +225,7 @@ Decisions made per-feature with a mini-doc before build (each has its own verifi
 | 7.2 | AdMob | Verify 2026 policies; only in Android builds (site stays AdSense/consent-managed) | M |
 | 7.3 | Premium subscription | Requires paid-capable hosting state + payment flow decision (new cost) | L |
 | 7.4 | Pl@ntNet diseases BETA research | Beta-coverage disclaimer; explore `/v2/diseases` routes; never marketed as diagnosis (canonical #10) | M |
-| 7.5 | Google OAuth | Reuse Supabase provider; trivial sized | S |
+| 7.5 | Google OAuth operations | Reuse the configured Supabase provider; owner-only provider/callback maintenance, no Firebase/custom bridge | S |
 
 ## 10. First Development Session of Phase 2 (Day-1 guidance)
 

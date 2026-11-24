@@ -5,6 +5,14 @@ Format based on Keep a Changelog; newest entries first.
 
 ---
 
+## [Unreleased] - Direct Supabase Google OAuth cutover (local code only) - 2026-11-24
+
+### Changed
+- `/login` and `/signup` now share one accessible **Continue with Google** action using Supabase OAuth with PKCE and SSR cookies. A new `/auth/callback` Route Handler performs the server `exchangeCodeForSession` and re-validates the `next` path with `safeAuthPath()`.
+- Normal-use email/password, magic-link, resend-confirmation, forgot-password and reset-password UI was removed. `/auth/confirm` and `/auth/link` remain unchanged for outstanding links and rollback; the Email provider stays enabled.
+- `auth.getClaims()` session verification, `src/proxy.ts`, `requireAuthRedirect()`, UUID ownership, RLS/Storage policies and persistence defaults are unchanged. No Firebase dependency, custom JWT, custom identity merge, credential read, DB change, migration, commit, push or deployment was performed.
+- Documentation now points to `docs/GOOGLE_OAUTH_SETUP.md` for owner-only Google Cloud/Supabase configuration. Real provider success and identity-linking E2E remain owner verification and are **not** claimed by offline tests.
+
 ## [0.9.1] - Real plant imagery + live camera capture - 2026-11-15
 
 ### Added — imagery (species-matched, license-verified, no fabricated species photos)

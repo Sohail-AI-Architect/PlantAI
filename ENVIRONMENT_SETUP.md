@@ -137,8 +137,12 @@ Zero-budget note: per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), Supaba
      - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (SECRET — see [`SECURITY.md`](SECURITY.md) §2)
    - Password for the DB is shown at project creation → store it if you ever need `SUPABASE_DB_URL`.
 3. (Later, at Phase 5 deployment) Create a **second** project `plantai-prod` and repeat the key recording steps.
-4. Enable **Email auth** in Authentication → Providers → Email → enable. This covers email/password + magic-link signup flows.
-5. **Do NOT enable third-party OAuth providers in MVP** (Google OAuth is deferred per canonical project decision #1).
+4. Keep **Email auth** enabled for rollback/outstanding links; it is no longer
+   the normal-use sign-in UI.
+5. Enable **Google** per [`docs/GOOGLE_OAUTH_SETUP.md`](docs/GOOGLE_OAUTH_SETUP.md).
+   This is an owner-only dashboard step: Google Cloud OAuth client → Supabase
+   provider → Supabase callback URL → redirect allowlist. No Google credential
+   belongs in PlantAI source or `.env.local`.
 6. Note that Free projects **pause after ~1 week of inactivity** and there are **no automatic backups on Free** — plan manual SQL dumps during development (per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md)).
 
 > Naming convention: `plantai-*` (lowercase) so both projects are visually adjacent in the dashboard.
@@ -173,7 +177,7 @@ Zero-budget note: per [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md), Supaba
 
 | Name | Source | Client-visible? | Notes |
 |---|---|---|---|
-| `NEXT_PUBLIC_SITE_URL` | You choose later (`http://localhost:3000` for dev) | Yes (public by design) | Used by auth email links and metadata |
+| `NEXT_PUBLIC_SITE_URL` | You choose later (`http://localhost:3000` for dev) | Yes (public by design) | Canonical/meta URLs; OAuth `redirectTo` uses the browser origin, which must be allowlisted in Supabase |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API | Yes (public by design) | Points at `plantai-dev` (region `ap-south-1`) for local dev |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → **Publishable key** | Yes (public by design) | **ADR-9 (2026-11-10):** new Supabase naming; replaces the older `NEXT_PUBLIC_SUPABASE_ANON_KEY` in this doc — same credential. Safe only because RLS is on for all tables ([`SECURITY.md`](SECURITY.md) §8) |
 | `SUPABASE_SECRET_KEY` | Supabase → **Project Settings → API Keys** — SECRET (server-only), format `sb_secret_...` | **No — server-only** | Bypasses RLS (resolves to the `service_role` Postgres role); never `NEXT_PUBLIC_`; needed for identifications persistence + `identification_cache`. **Canonical name per current Supabase docs (Phase 2.5, 2026-11-12)** — legacy `anon`/`service_role` JWT keys are deprecated by end of 2026 |
@@ -274,7 +278,9 @@ Run through and tick:
 - [ ] `git --version` prints a version; `git config --global user.name` and `user.email` are non-empty.
 - [ ] GitHub repo `PlantAI` exists; `git clone` of it succeeds locally.
 - [ ] Supabase dashboard (`https://supabase.com/dashboard`) reachable; `plantai-dev` project active (green "Active" badge, not paused).
-- [ ] Email auth enabled in Supabase (Authentication → Providers).
+- [ ] Email auth still enabled for rollback; Google enabled per
+      [`docs/GOOGLE_OAUTH_SETUP.md`](docs/GOOGLE_OAUTH_SETUP.md), with local and
+      production origins allowlisted.
 - [ ] Pl@ntNet account active at https://my.plantnet.org; API key generated and visible in Settings.
 - [ ] `.env.local` (created in Phase 1, not before) holds all 5 canonical variables — nothing else.
 - [ ] `.env.local` is listed in `.gitignore` (Phase 1 file) — verify with `git check-ignore .env.local`.
@@ -346,7 +352,7 @@ Do not pre-install this "just in case" — skip until a real install demands it.
 - ❌ **Do not create `.env.local` with real keys yet** — templates in §5.3 are there for Phase 1; producing a real `.env.local` too early usually means the file rots before Supabase/Pl@ntNet values exist anyway.
 - ❌ **Do not run the Supabase CLI or Docker** — those are Phase 2+ tools.
 - ❌ **Do not commit secrets to the (future) repo** — read [`SECURITY.md`](SECURITY.md) §2 before touching any key.
-- ❌ **Do not enable Google OAuth in Supabase config** — deferred to post-MVP, per canonical project decisions.
+- ❌ **Do not put Google client IDs/secrets in app code, `.env.local`, docs or chat** — provider configuration is owner-only in Google Cloud + Supabase (`docs/GOOGLE_OAUTH_SETUP.md`). This Phase-0 note is historical; the current normal-use flow is Google OAuth.
 - ✅ DO: write docs, read [`VERIFIED_FACTS`](docs/VERIFIED_FACTS.md), and finalize decisions in [`TASKS.md`](TASKS.md).
 
 ---

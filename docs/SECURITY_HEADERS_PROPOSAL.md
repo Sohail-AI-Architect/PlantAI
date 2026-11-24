@@ -67,9 +67,13 @@ Compatibility analysis (each directive vs the actual app):
   (`src/lib/plantnet/live-provider.ts`), so the browser never needs that origin; adding it would
   widen the client attack surface for no benefit.
 - **`frame-ancestors 'none'`** — replaces/extends XFO `DENY`; no embedding use-case exists.
-- **`form-action 'self'`** — auth forms post via supabase-js XHR, not native form navigation; safe.
-- **Supabase auth redirects** (`/auth/confirm`, magic-link, recovery) are same-origin navigations —
-  unaffected by CSP. No `*.supabase.co` entries needed beyond the project host above.
+- **`form-action 'self'`** — no native credential form remains; Google OAuth starts via a supabase-js
+  redirect and returns same-origin to `/auth/callback`, so CSP form targets are not part of the
+  provider allowlist.
+- **Auth redirects** — the Google/Supabase provider redirect is governed by Google Cloud's authorized
+  redirect URIs and Supabase's redirect allowlist (`docs/GOOGLE_OAUTH_SETUP.md`), not by CSP.
+  Legacy `/auth/confirm` and `/auth/link` callbacks are same-origin navigations — unaffected by CSP.
+  No `*.supabase.co` entries are needed beyond the project host above.
 - **Third-party scripts (AdSense, analytics):** NONE exist today. **When AdSense ships (Phase 5/6),
   CSP must be revisited** — AdSense requires script/img/frame allowances for `googleadservices.com`,
   `googlesyndication.com`, `doubleclick.net` etc. This is a planned, conscious Phase 5 change, not an
@@ -95,8 +99,8 @@ Compatibility analysis (each directive vs the actual app):
 1. **Build gate:** `npm run build` exit 0; `npm run typecheck` clean.
 2. **Header presence:** `curl -sI http://localhost:3000/ | findstr /i "strict-transport content-security x-frame x-content-type referrer-policy"` — all five present with expected values on `/`, `/identify`, `/plant/<slug>`, `/login`, and a 404 response.
 3. **CSP soak (Report-Only):** browse all real routes in Chrome/Edge + Firefox; confirm **zero CSP
-   violations** in DevTools console; exercise auth flows (signup, login, magic link, reset) and the
-   identify upload flow; only then switch to enforcing.
+   violations** in DevTools console; exercise Google sign-in/out and any reachable legacy callbacks,
+   plus the identify upload flow; only then switch to enforcing.
 4. **Functional regression:** identify upload (mock), save-plant action, auth loop all still work
    (CSP must not break `connect-src` to Supabase or inline bootstrap).
 5. **External spot-check (optional):** a public header-inspection service of the owner's choosing

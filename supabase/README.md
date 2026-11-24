@@ -88,7 +88,7 @@ these variables without explicit owner approval.
 
 - [ ] Migrations applied to `plantai-dev` (or `plantai-prod` as target)
 - [ ] Data API reachability verified per the grant-based model above (`plant_library` anon REST → 200; `identification_cache` anon REST → 401)
-- [ ] Authentication: email/password + magic link visible in Auth providers (email confirm on)
+- [ ] Authentication: Google enabled for normal use per [`../docs/GOOGLE_OAUTH_SETUP.md`](../docs/GOOGLE_OAUTH_SETUP.md), with Supabase callback + local/production origins allowlisted; Email still enabled for rollback
 - [ ] Storage: both buckets exist with correct public/private flags
 - [ ] Admin account: create the real owner account, then run the promotion UPDATE from `004_seed.sql` comments
 - [ ] First smoke query returns rows: `select count(*) as species from public.plant_library;` (expect 10)

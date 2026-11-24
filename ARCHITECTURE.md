@@ -171,7 +171,7 @@ Only these components are `"use client"`; everything else stays a Server Compone
 | 4 | Reminder form (Phase 4) | Interval/editor interactions, optimistic "mark as done" | Server Action submit; client state only for optimistic UI |
 | 5 | Ad unit wrapper (Phase 5) | AdSense script tag is client-context; wrapper module chosen so it loads nothing in dev/MVP | Non-commercial on Hobby: **no ads before Phase 5 host decision** ([`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Vercel) |
 
-Auth forms (`/login`, `/signup`) use the Supabase JS client directly in small client components (documented split — see §7 and API_DOCUMENTATION.md §Server Actions catalog).
+Auth entry points (`/login`, `/signup`) use a shared client component that starts Supabase Google OAuth (`signInWithOAuth`) in the browser; the PKCE code is exchanged by a server Route Handler (documented split — see §7). Neither page collects credentials or identity data.
 
 ### 3.3 Data-fetch & UX error/loading patterns
 
@@ -207,7 +207,7 @@ Full signatures/zod contracts live in `API_DOCUMENTATION.md` §Server Actions ca
 | Reminders | `createReminder`, `completeReminder`, `updateReminder`, `deleteReminder` | 4 |
 | Admin | `adminUpsertPlantLibraryEntry`, `adminUpsertBlogPost` | 3–4 |
 
-Auth signup/login/reset: **not** Server Actions — Supabase JS client on small client components + middleware (rationale in §7 and API_DOCUMENTATION.md).
+Auth sign-in: **not** a Server Action — the browser starts Supabase Google OAuth and the `/auth/callback` Route Handler performs the server PKCE exchange; legacy `/auth/confirm` and `/auth/link` remain for rollback (rationale in §7).
 
 ### 4.3 Route → data/actions mapping
 
@@ -224,7 +224,7 @@ Auth signup/login/reset: **not** Server Actions — Supabase JS client on small 
 | `/account` | Own `profiles` row | profile update actions |
 | `/blog`, `/blog/[slug]` | Published `blog_posts` | — |
 | `/about`, `/contact`, `/privacy`, `/terms`, `/cookie-policy` | Static content | `submitContact` |
-| `/login`, `/signup` | — | Supabase auth (client) |
+| `/login`, `/signup` | — | Supabase Google OAuth (client redirect → server `/auth/callback`) |
 | `/admin` | All tables via service-role/is_admin path | admin upsert actions |
 
 ---
@@ -252,20 +252,19 @@ Auth signup/login/reset: **not** Server Actions — Supabase JS client on small 
 
 ## 7. Authentication architecture
 
-### 7.1 Flows (Supabase Auth, email/password first)
+### 7.1 Flows (direct Supabase Google OAuth)
 
 | Flow | Mechanism | Notes |
 |---|---|---|
-| Signup | `signUp()` on a client component with username metadata | PKCE confirmation link → `/auth/link?next=…` → client code exchange → intended page |
-| Email confirm | token_hash template → `/auth/confirm` (`verifyOtp`) OR PKCE template → `/auth/link` | Session cookie established by Supabase; success flag preserved to `/dashboard` |
-| Login | client `signInWithPassword()` / `signInWithOtp()`; session in cookies | Validated `next` path; never creates an account from the login page |
+| First sign-in / signup | `/login` or `/signup` → `signInWithOAuth({ provider: "google", options: { redirectTo } })` | Supabase Auth creates the canonical UUID user and profile; no PlantAI password, username field or client identity data |
+| Returning sign-in | Same Google identity → Supabase automatic linking by verified email | Original UUID and data are retained; different verified emails are independent accounts |
+| PKCE callback | `/auth/callback` Route Handler → server `exchangeCodeForSession(code)` with `@supabase/ssr` cookies | `next` is re-validated with `safeAuthPath()`; failure redirects to `/login?error=oauth&next=…` |
 | Logout | client `signOut({ scope: "global" })` with guaranteed local fallback + router refresh | Clears browser cookies; server-side revocation is best-effort offline |
-| Password reset | `resetPasswordForEmail` → `/reset-password?code=…` → `updateUser()` | Local session cleared before guest-only `/login?reset=1` so the message is visible |
-| Session refresh | `src/proxy.ts` verifies/refreshes claims once per request via `@supabase/ssr` | Single source of session truth for RSC |
-| One-click anonymous sign-in | **Removed** — no anonymous sign-in UI, helper or badge | All sessions are normal Supabase email/password or magic-link sessions |
-| (Future) OAuth | Supabase Google provider (available on Free, [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) §Supabase) | Non-MVP; same callback route reused |
+| Legacy email confirm / links | `/auth/confirm` (`verifyOtp`) and `/auth/link` (client PKCE) | Preserved unchanged for verification/rollback; completing an old recovery link requires restoring the retired reset form; not normal-use UI |
+| Session refresh | `src/proxy.ts` verifies/refreshes claims once per request via `@supabase/ssr` | Single source of session truth for RSC; `getSession()` user data is not trusted |
+| One-click anonymous sign-in | **Removed** — no anonymous sign-in UI, helper or badge | All normal-use sessions are Supabase Google OAuth sessions |
 
-Magic links are a fallback option if email-confirm friction needs lowering — decision deferred to Phase 2 implementation.
+Owner configuration and the pending real-sign-in checklist are in [`docs/GOOGLE_OAUTH_SETUP.md`](docs/GOOGLE_OAUTH_SETUP.md). Email provider/state is retained for rollback only.
 
 ### 7.2 Route protection
 

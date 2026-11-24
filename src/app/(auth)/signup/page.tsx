@@ -8,10 +8,10 @@ export const metadata: Metadata = {
 };
 
 /*
- * /signup — Phase 2 auth (roadmap task 2.5). Username metadata feeds the
- * existing `handle_new_user()` trigger (DATABASE_SCHEMA.md §3.1/§5.2) — no
- * profile write from app code, and no role can ever be set from the client.
- * Suspense: SignupForm reads search params (Cache Components — Next.js 16).
+ * /signup — same verified Supabase Google OAuth flow as /login. Supabase Auth
+ * creates the UUID user and the existing profile trigger creates the profile;
+ * no role or identity data is set by the client. Suspense: the form reads
+ * runtime search params (Cache Components — Next.js 16).
  */
 export default function SignupPage() {
   return (
@@ -23,7 +23,7 @@ export default function SignupPage() {
         />
         <h1 className="text-2xl font-bold tracking-tight">Create an account</h1>
         <p className="text-foreground-muted mt-1 text-sm">
-          Free forever — confirm your email to activate the account.
+          Free forever — your first Google sign-in creates the account.
         </p>
         <Suspense fallback={<div className="text-foreground-muted mt-6 text-sm">Loading sign-up…</div>}>
           <SignupForm />

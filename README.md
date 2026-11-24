@@ -15,7 +15,7 @@ TypeScript, Supabase and Pl@ntNet integration.
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3.3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres_Auth_Storage-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![Netlify](https://img.shields.io/badge/hosted_on-Netlify_Free-00C7B7?logo=netlify&logoColor=white)](https://www.netlify.com/)
-[![Tests](https://img.shields.io/badge/tests-243_passing-22C55E)](TESTING_PLAN.md)
+[![Tests](https://img.shields.io/badge/tests-289_passing-22C55E)](TESTING_PLAN.md)
 
 **AI plant identification · Plant recognition · Houseplant care · Gardening technology**
 
@@ -109,9 +109,12 @@ for exactly what is switched on and what is deliberately off.
   with local, license-verified photography and on-page search.
 - **Plant species detail pages** — structured care information, imagery with
   attribution, and shareable URLs for every species.
-- **User authentication** — email sign-up, sign-in, sign-out, password reset,
-  and email confirmation flows built on Supabase Auth. There is no one-click
-  anonymous login; use Create account or Sign in.
+- **User authentication** — one Supabase Google OAuth flow on `/login` and
+  `/signup` using PKCE + SSR cookies, plus sign-out. First verified Google
+  sign-in creates the account; returning sign-in works. Email/password,
+  magic-link and password-recovery UI are no longer shown in normal use.
+  Provider setup is owner-only; see
+  [`docs/GOOGLE_OAUTH_SETUP.md`](docs/GOOGLE_OAUTH_SETUP.md).
 - **Saved plants** — logged-in users can save identification results to their
   account (server actions with validation).
 - **User dashboard** — a personal overview for saved plants and activity.
@@ -204,7 +207,7 @@ the bundled registry acts as a verified fallback display source.
 | Database & Auth | Supabase (PostgreSQL, Auth, Storage) |
 | Identification | Pl@ntNet-compatible provider pipeline (mock default) |
 | Validation | Zod |
-| Testing | Vitest — 243 passing tests |
+| Testing | Vitest — 289 passing tests |
 | Linting / Formatting | ESLint 9 (flat config) + Prettier |
 | Hosting | Netlify Free (OpenNext-based Next.js runtime) |
 
@@ -217,7 +220,8 @@ write-up lives in [`ARCHITECTURE.md`](ARCHITECTURE.md); the short version:
 
 - **App Router pages** organized by route groups: public pages, authenticated
   user pages (`/dashboard`, `/my-plants`, `/saved-plants`, `/reminders`),
-  and auth pages (`/login`, `/signup`, password recovery).
+  and auth pages (`/login`, `/signup`, `/auth/callback`); legacy email
+  callbacks remain for rollback.
 - **Server actions** (`src/actions/`) handle mutations — saving plants and
   contact submissions — with Zod validation and rate limiting.
 - **Provider-based identification** (`src/lib/plantnet/`) — a shared
@@ -409,7 +413,7 @@ Details and reporting guidance: [`SECURITY.md`](SECURITY.md).
 | Camera capture & image validation | ✅ Working |
 | On-device upload optimization | ✅ Working (browser-dependent; degrades honestly) |
 | Plant library (10 species) + detail pages | ✅ Working |
-| Authentication (sign-up / in / out / reset / confirm) | ✅ Implemented + offline regression-tested; real-email E2E needs an owner-approved test user |
+| Authentication (Google sign-up / in / out; legacy email callbacks) | ✅ Implemented + offline regression-tested; real Google E2E is owner-only and not yet verified |
 | Saved plants + dashboard | ✅ Working |
 | Contact form | ✅ Working |
 | Live Pl@ntNet identification | 🔜 Code complete — **owner-gated activation** |
@@ -421,7 +425,7 @@ Details and reporting guidance: [`SECURITY.md`](SECURITY.md).
 
 Additional verified facts:
 
-- The automated test suite currently counts **243 passing tests**
+- The automated test suite currently counts **289 passing tests**
   (`npm test`).
 - Live Pl@ntNet identification requires both `PLANTNET_MODE=live` and a valid
   `PLANTNET_API_KEY`; a key by itself never enables live mode. Missing, blank

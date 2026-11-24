@@ -43,12 +43,12 @@ export default function PrivacyPage() {
       <h2>2. Information you provide to us</h2>
       <h3>Account information</h3>
       <p>
-        If you create an account, we collect the email address you register
-        with and authentication data managed by our authentication provider,
-        Supabase. Passwords are handled by Supabase&apos;s authentication
-        system; we do not store your plain-text password. You may also choose
-        to sign in through the password-reset and email-link flows, which use
-        your email address to send you a one-time link.
+        Accounts are created and secured by Supabase Auth using your verified
+        Google account. Supabase receives the email address and identity data
+        Google provides; PlantAI does not ask you for a PlantAI password and
+        does not store your password. Legacy email-link and recovery callbacks
+        remain available only for outstanding links and rollback, not as the
+        normal sign-in experience.
       </p>
 
       <h3>Plant photos and identification requests</h3>

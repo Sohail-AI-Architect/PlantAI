@@ -3,23 +3,22 @@ import type { Metadata } from "next";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
 export const metadata: Metadata = {
-  title: "Reset your password",
+  title: "Sign in with Google",
   robots: { index: false, follow: false },
 };
 
 /*
- * /forgot-password — Phase 2 auth (FR-AUTH-006). Sends a Supabase recovery
- * email pointing directly at /reset-password, where the PKCE one-time code
- * is exchanged client-side. Suspense: the form reads search params
- * (Cache Components — Next.js 16).
+ * /forgot-password — retired password flow. Redirects to the Google sign-in
+ * experience with a validated `?next=`; kept as a bookmark-safe route.
+ * Suspense: the redirect component reads runtime search params (Next.js 16).
  */
 export default function ForgotPasswordPage() {
   return (
     <section className="mx-auto w-full max-w-md px-4 py-16 sm:px-6">
       <div className="border-border-muted bg-surface rounded-xl border p-6 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight">Reset your password</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Google sign-in</h1>
         <p className="text-foreground-muted mt-1 text-sm">
-          Enter your account email and we&apos;ll send a one-time reset link.
+          Password reset is obsolete — continue with Google instead.
         </p>
         <Suspense fallback={<div className="text-foreground-muted mt-6 text-sm">Loading…</div>}>
           <ForgotPasswordForm />

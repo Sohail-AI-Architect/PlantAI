@@ -83,7 +83,7 @@ Tier mapping (canonical): **Tier 1** = MVP identification core · **Tier 2** = C
 |---------|-------------|------|-------|----------|
 | About page | Project story, honest "how identification works" explanation | 2 | 3 | `/about` |
 | Admin architecture | `profiles.role = 'admin'`; protected `/admin` area for plant library & blog moderation, contact inbox, identifications abuse view | 3 (architecture in 2) | 4 | `/admin` |
-| Auth | Supabase Auth: email/password + magic link (Google OAuth optional, Phase 4+) | 1 | 2 | `/login`, `/signup` |
+| Auth | Supabase Auth: direct Google OAuth with PKCE + SSR cookies; Email retained for rollback only; no Firebase/custom identity bridge | 1 | 2 | `/login`, `/signup`, `/auth/callback` |
 | Blog | SEO content: plant care articles, project updates | 2 (publish)/3 (admin moderation) | 3 (core) / 4 (full admin) | `/blog`, `/blog/[slug]` |
 | Care guides | Human-edited watering, sunlight, soil, fertilizer guidance per plant page | 2 | 3 | `/plant/[slug]` |
 | Contact | Form → `contact_messages` table + admin inbox | 2 | 3 | `/contact` |

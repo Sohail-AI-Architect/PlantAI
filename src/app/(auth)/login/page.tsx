@@ -8,12 +8,10 @@ export const metadata: Metadata = {
 };
 
 /*
- * /login — Phase 2 auth (roadmap task 2.5, FR-AUTH-*). Minimal centered
- * card per UI_UX_DESIGN.md §6.6. Server wrapper: the interactive form is a
- * client component using the existing browser Supabase client
- * (API_DOCUMENTATION.md §3.4 — auth is NOT a Server Action by design).
- * Suspense: LoginForm reads `?next`/`?confirmed` search params (runtime
- * data under Cache Components — Next.js 16).
+ * /login — single Google OAuth entry point. Server wrapper keeps the existing
+ * botanical card; the client component starts Supabase's official PKCE flow
+ * (auth is NOT a Server Action by design). Suspense: it reads runtime
+ * `?next`/status search params under Next.js 16 Cache Components.
  */
 export default function LoginPage() {
   return (
@@ -25,7 +23,7 @@ export default function LoginPage() {
         />
         <h1 className="text-2xl font-bold tracking-tight">Sign in</h1>
         <p className="text-foreground-muted mt-1 text-sm">
-          Welcome back — sign in to save plants and get more identifications.
+          Continue with Google to save plants and get more identifications.
         </p>
         <Suspense fallback={<div className="text-foreground-muted mt-6 text-sm">Loading sign-in…</div>}>
           <LoginForm />

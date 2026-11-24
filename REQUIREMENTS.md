@@ -72,18 +72,18 @@
 | FR-RES-005 | If identified plant is pet-toxic and that flag exists in library data, a clear pet-safety notice renders (source: human-curated flag, never AI-invented). |
 | FR-RES-006 | User can save an identified plant to /saved-plants **after signing in** with a non-destructive sign-in nudge. |
 
-### 1.5 Auth (canonical decision #2 — Supabase Auth)
+### 1.5 Auth (canonical decision #2 — Supabase Auth; owner-approved direct Google OAuth)
 
 | ID | Requirement |
 |----|-------------|
-| FR-AUTH-001 | **Sign up** at `/signup` with email + password; password minimum rules per SECURITY.md. |
-| FR-AUTH-002 | **Email verification** required before authenticated features activate; verification flow uses Supabase's built-in email. |
-| FR-AUTH-003 | **Magic-link login** available at `/login` as an alternative to password. |
-| FR-AUTH-004 | **Password reset** flow via Supabase reset email. |
-| FR-AUTH-005 | **Logout** (client + server action clearing session) from `/account` and from the header menu when signed in. |
-| FR-AUTH-006 | On signup/first login, a `profiles` row is created (trigger per DATABASE_SCHEMA.md) with `role = 'user'`. |
+| FR-AUTH-001 | `/login` and `/signup` each render one accessible **Continue with Google** action backed by Supabase Auth; no credential form is shown. |
+| FR-AUTH-002 | Sign-in uses `signInWithOAuth({ provider: "google" })` with PKCE and a `safeAuthPath()`-validated `next`; `/auth/callback` exchanges the code with the server client and writes SSR cookies. |
+| FR-AUTH-003 | The first verified Google sign-in creates the canonical `auth.users.id` UUID and `profiles` row via the existing trigger; returning sign-in resolves the same account through Supabase automatic identity linking. Different verified Google emails remain separate accounts. |
+| FR-AUTH-004 | Normal-use UI has no email/password, magic-link, resend-confirmation, forgot-password or reset-password control. Legacy `/auth/confirm` and `/auth/link` verification/forwarding remain for rollback; completing an old recovery link requires restoring the retired reset form from version control. |
+| FR-AUTH-005 | **Logout** clears the session with a guaranteed local fallback, refreshes the client, and redirects to `/login`; protected pages re-check claims. |
+| FR-AUTH-006 | On first sign-in, a `profiles` row is created (trigger per DATABASE_SCHEMA.md) with `role = 'user'`; no client-supplied id, email, role or Google profile field is trusted. |
 | FR-AUTH-007 | Header auth state (login link vs avatar menu) updates after every auth transition — no hard refresh required. |
-| FR-AUTH-008 | Google OAuth is explicitly **post-MVP** (Phase 4+); the MVP login UI must not show a Google button. |
+| FR-AUTH-008 | Google provider configuration is owner-only (`docs/GOOGLE_OAUTH_SETUP.md`); Email stays enabled for rollback; no Firebase, custom JWT, or custom identity-merge integration. |
 
 ### 1.6 Plant detail page (Tier 1 preview, Tier 2 fullness)
 
@@ -139,7 +139,7 @@
 | FR-FUT-002 | AdMob integration (UNVERIFIED policies until Phase 7). |
 | FR-FUT-003 | Premium subscription (e.g. ad-free); requires paid-capable hosting state first. |
 | FR-FUT-004 | Pl@ntNet **diseases BETA** exploration: separate research spike with explicit "beta-quality" disclaimers; never marketed as full disease diagnosis (canonical decision #10). |
-| FR-FUT-005 | Google OAuth sign-in option (was deferred from Phase 4). |
+| FR-FUT-005 | Google OAuth sign-in — **superseded by FR-AUTH-001..008** and implemented in normal-use UI; owner provider configuration and real E2E remain pending. |
 
 ## 6. Non-Functional Requirements
 
@@ -252,10 +252,10 @@ Format: Given / When / Then. IDs reference the requirement groups above.
 | Upload | AC-UP-3 | User selects a 2 MB GIF | Upload is attempted | "JPEG/PNG only" error; no network call |
 | Upload | AC-UP-4 | Attacker POSTs an oversized/bad-MIME body straight to `/api/identify` | Server validates | Typed error returned; **no Pl@ntNet call** consumed (quota protected) |
 | Upload | AC-UP-5 | Anonymous user already used 5 successful identifications today | They attempt a 6th | Dedicated quota-reached state with sign-in suggestion & daily-limit copy |
-| Auth | AC-AU-1 | New visitor | Signs up with valid email/password, confirms email | Authenticated; `profiles` row exists with `role='user'`; header shows account menu |
-| Auth | AC-AU-2 | Registered user | Requests magic link at `/login` and follows it | Signed in without password |
-| Auth | AC-AU-3 | Signed-in user | Uses password reset and logs in with new password | Access restored; old password invalid |
-| Auth | AC-AU-4 | Signed-out user | Clicks logout | Session cleared; auth-gated nav entries disappear without reload |
+| Auth | AC-AU-1 | New visitor with a verified Google account | Clicks Continue with Google on `/login` or `/signup` | Supabase creates a canonical UUID user + `profiles` row with `role='user'`; header shows account menu |
+| Auth | AC-AU-2 | Returning Google user | Clicks Continue with Google again | Same UUID and data are restored through Supabase automatic identity linking |
+| Auth | AC-AU-3 | Existing local account with the same verified email | Owner enables Google and the user signs in | Supabase links the identity to the original UUID if permitted; a different verified Google email remains a separate account |
+| Auth | AC-AU-4 | Signed-out user | Clicks logout | SSR cookies cleared; protected routes redirect to `/login?next=…`; auth-gated nav entries disappear without reload |
 | Flow | AC-FL-1 | Anonymous user on first identification | Upload completes | Results render top-3 matches + confidence bars + attribution text ("< 15 s" typical per NFR-P-004) |
 | Flow | AC-FL-2 | Pl@ntNet unreachable (simulated) | Upload completes | Degraded "temporarily unavailable" state with retry; no raw errors |
 | Flow | AC-FL-3 | Upstream daily quota exhausted (HTTP 429 from Pl@ntNet) | Upload completes | Quota-reached state explains reset at midnight UTC; no crash |

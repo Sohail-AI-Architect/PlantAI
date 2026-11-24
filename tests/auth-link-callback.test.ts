@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  PASSWORD_UPDATED_MESSAGE,
-  RESEND_CONFIRMATION_SENT_MESSAGE,
   authLinkErrorMessage,
   recoveryLinkErrorMessage,
 } from "@/lib/auth/login-messages";
@@ -15,23 +13,17 @@ import {
 } from "@/lib/auth/auth-contracts";
 
 /*
- * Regression tests for the PKCE callback defects (F8/F9 + 2026-11-24 repair).
+ * Legacy callback rollback coverage plus the Google cutover boundary.
  *
- * The browser Supabase client is PKCE by default, so signInWithOtp, signUp,
- * resend and password recovery all email a `?code=` that only the originating
- * browser can exchange. Magic-link/confirmation links land on /auth/link;
- * recovery lands on /reset-password; token_hash recovery is forwarded there
- * too so the browser can prove PASSWORD_RECOVERY, while other token_hash
- * templates stay server-verified in /auth/confirm.
- *
- * Pure-function contracts + SOURCE contracts, simulated flows only. Real
- * GoTrue delivery needs owner E2E and is not claimed here.
+ * /auth/link and /auth/confirm remain intact for outstanding emails and
+ * rollback. Email/password, magic-link, resend and recovery forms are no
+ * longer normal-use UI. Pure-function + SOURCE contracts only; no live
+ * GoTrue delivery or real account state is claimed.
  */
 
 const src = (rel: string) =>
   readFileSync(path.resolve(process.cwd(), rel), "utf8");
 
-/** Strip block + line comments so assertions pin CODE, not documentation. */
 function codeOnly(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -71,7 +63,7 @@ describe("safe redirect helpers — no open redirects, intent preserved", () => 
     expect(safeAuthPath(null)).toBe("/dashboard");
   });
 
-  it("email links carry the validated next destination", () => {
+  it("legacy email helpers remain available for rollback", () => {
     expect(authLinkRedirectUrl("https://plantai.test", "/saved-plants?x=1")).toBe(
       "https://plantai.test/auth/link?next=%2Fsaved-plants%3Fx%3D1"
     );
@@ -87,62 +79,30 @@ describe("safe redirect helpers — no open redirects, intent preserved", () => 
   });
 });
 
-describe("magic link — PKCE redirect target", () => {
-  it("emailRedirectTo uses the client-side exchange helper (/auth/link)", () => {
-    expect(loginSource()).toMatch(/emailRedirectTo:\s*authLinkRedirectUrl\(/);
+describe("normal-use screens no longer send email flows", () => {
+  it("login has no magic-link or resend action", () => {
+    const code = codeOnly(loginSource());
+    expect(code).not.toMatch(/signInWithOtp|auth\.resend|emailRedirectTo/);
+    expect(code).not.toMatch(/\/auth\/confirm/);
+    expect(code).toMatch(/GoogleSignInButton/);
   });
 
-  it("never targets the token_hash-only callback in code", () => {
-    expect(codeOnly(loginSource())).not.toMatch(/\/auth\/confirm/);
-  });
-
-  it("refuses implicit account creation", () => {
-    expect(loginSource()).toMatch(/shouldCreateUser:\s*false/);
-  });
-
-  it("maps OTP failures through the neutral 429-aware mapper", () => {
-    expect(loginSource()).toMatch(/magicLinkErrorMessage\(otpError\)/);
-  });
-});
-
-describe("sign-up confirmation — PKCE redirect target", () => {
-  it("signUp emailRedirectTo uses /auth/link with `next`", () => {
-    expect(signupSource()).toMatch(/emailRedirectTo:\s*authLinkRedirectUrl\(/);
-    expect(signupSource()).toMatch(/withAuthNext\(/g);
-  });
-
-  it("never claims an account was created unless Supabase returns success", () => {
+  it("signup has no email confirmation form", () => {
     const code = codeOnly(signupSource());
-    expect(code).toMatch(/if \(signUpError\)/);
-    expect(code).toMatch(/if \(data\.session\)/);
-    expect(code).toMatch(/setPendingConfirmation\(true\)/);
-    expect(code).not.toMatch(/Account created/);
+    expect(code).not.toMatch(/signUp\(|emailRedirectTo|setPendingConfirmation/);
+    expect(code).not.toMatch(/Account created|signed in automatically/);
+    expect(code).toMatch(/GoogleSignInButton/);
   });
 
-  it("pending-confirmation copy matches auto-sign-in on link open", () => {
-    expect(signupSource()).toMatch(/signed in automatically/);
-  });
-});
-
-describe("resend confirmation — PKCE redirect target", () => {
-  it("resend emailRedirectTo uses /auth/link (resend also sends a PKCE challenge)", () => {
-    expect(loginSource()).toMatch(
-      /auth\.resend\(\{[\s\S]*?emailRedirectTo:\s*authLinkRedirectUrl\(/
-    );
-  });
-
-  it("resend stays existence-neutral", () => {
-    expect(loginSource()).toMatch(/setInfo\(RESEND_CONFIRMATION_SENT_MESSAGE\)/);
-    expect(RESEND_CONFIRMATION_SENT_MESSAGE).toMatch(
-      /if that address still needs confirming/i
-    );
-    expect(RESEND_CONFIRMATION_SENT_MESSAGE).not.toMatch(
-      /not (registered|found|exist)|no account/i
-    );
+  it("forgot and reset screens redirect to the shared Google flow", () => {
+    for (const source of [forgotSource(), resetSource()]) {
+      expect(codeOnly(source)).toMatch(/router\.replace\(loginPath\)/);
+      expect(codeOnly(source)).not.toMatch(/resetPasswordForEmail|updateUser\(/);
+    }
   });
 });
 
-describe("/auth/link handler — client-side PKCE exchange", () => {
+describe("/auth/link handler stays available for outstanding email links", () => {
   it("reads the one-time ?code= and calls exchangeCodeForSession", () => {
     expect(handlerSource()).toMatch(/searchParams\.get\("code"\)/);
     expect(handlerSource()).toMatch(/exchangeCodeForSession\(code\)/);
@@ -222,35 +182,16 @@ describe("token_hash callback (/auth/confirm) stays available", () => {
   });
 });
 
-describe("password recovery flow preserved", () => {
-  it("forgot-password redirects directly to /reset-password via the shared helper", () => {
-    expect(forgotSource()).toMatch(
-      /redirectTo:\s*resetPasswordRedirectUrl\(/
-    );
-    expect(codeOnly(forgotSource())).not.toMatch(/\/auth\/confirm/);
-  });
-
-  it("reset-password exchanges its own PKCE code and clears the session before landing", () => {
-    expect(resetSource()).toMatch(/exchangeCodeForSession\(code\)/);
-    expect(resetSource()).toMatch(/clearBrowserSession\(supabase\)/);
-    expect(resetSource()).toMatch(
-      /router\.replace\(withAuthNext\("\/login\?reset=1", nextPath\)\)/
-    );
-    expect(PASSWORD_UPDATED_MESSAGE).toMatch(/password updated/i);
-  });
-
-  it("the two failure messages stay distinct and neutral", () => {
-    expect(recoveryLinkErrorMessage()).not.toBe(authLinkErrorMessage());
-    for (const message of [recoveryLinkErrorMessage(), authLinkErrorMessage()]) {
-      expect(message).toMatch(/invalid or has expired/i);
-      expect(message).not.toMatch(
-        /not (registered|found|exist)|no account|already (used|confirmed)/i
-      );
-    }
+describe("new OAuth callback is separate from legacy callbacks", () => {
+  it("does not overwrite /auth/confirm or /auth/link", () => {
+    const callback = src("src/app/auth/callback/route.ts");
+    expect(callback).toMatch(/GOOGLE_OAUTH_CALLBACK_PATH|\/auth\/callback/);
+    expect(confirmRouteSource()).toMatch(/verifyOtp/);
+    expect(handlerSource()).toMatch(/exchangeCodeForSession\(code\)/);
   });
 });
 
-describe("neutrality of the auth-link failure message", () => {
+describe("neutrality of retained link failure messages", () => {
   it("invalid, expired, already-used and network failures are indistinguishable", () => {
     for (const err of [
       { code: "otp_expired" },
@@ -259,6 +200,11 @@ describe("neutrality of the auth-link failure message", () => {
       undefined,
     ]) {
       expect(authLinkErrorMessage(err)).toBe(authLinkErrorMessage(undefined));
+      expect(recoveryLinkErrorMessage(err)).toBe(
+        recoveryLinkErrorMessage(undefined)
+      );
     }
+    expect(authLinkErrorMessage()).toMatch(/invalid or has expired/i);
+    expect(recoveryLinkErrorMessage()).toMatch(/invalid or has expired/i);
   });
 });

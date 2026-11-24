@@ -4,7 +4,9 @@
 > Statuses: ⬜ Pending · ✅ Completed · 🚧 In progress · ⛔ Blocked · ➡️ Deferred to a later phase.
 > Reference documents: [PROJECT_PLAN.md](PROJECT_PLAN.md) · [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) · [REQUIREMENTS.md](REQUIREMENTS.md) · [docs/VERIFIED_FACTS.md](docs/VERIFIED_FACTS.md)
 
-**Last updated: 2026-11-15 (imagery + camera session - real species photography across the app + live getUserMedia capture in the identify flow; see CHANGELOG [0.9.1]; prior: Fast MVP completion [0.9.0])**
+**Last updated: 2026-11-24 (direct Supabase Google OAuth cutover in local code; owner provider config + real E2E pending — see CHANGELOG [Unreleased] and `docs/GOOGLE_OAUTH_SETUP.md`; prior imagery + camera session 2026-11-15)**
+
+> The P2-07 row below is a historical Phase 2 record. Normal-use UI is now Google-only; legacy email/password callbacks and helpers remain for rollback only.
 
 ---
 

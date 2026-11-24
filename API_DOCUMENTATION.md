@@ -36,8 +36,9 @@ PlantAI deliberately keeps the **public HTTP API surface minimal**:
 |---|---|
 | **RSC pages** (App Router) | All *reads* — the page *is* the API for data rendering: `/plant/[slug]`, `/library?q=`, `/my-plants`, blog, static pages |
 | **Server Actions** (`src/actions/*`) | All *mutations* except identify: saved plants, contact form, Phase-4 reminders/my-plants, admin content writes |
-| **`POST /api/identify`** | **The only Route Handler in the MVP** — binary upload → validation → rate limit → cache → server-side Pl@ntNet proxy → persist → JSON |
-| **Supabase client SDK** (from browser) | Auth session flows only (signup/confirm/login/reset/logout) + RLS-authorized Storage uploads; database reads through the SDK are not used by pages (pages go server-side) |
+| **`POST /api/identify`** | **The only data Route Handler in the MVP** — binary upload → validation → rate limit → cache → server-side Pl@ntNet proxy → persist → JSON |
+| **Auth Route Handlers** | `/auth/callback` exchanges the Google PKCE code server-side; `/auth/confirm` and `/auth/link` remain for verification/rollback (recovery completion needs the retired reset form restored) |
+| **Supabase client SDK** (from browser) | Starts Google OAuth, signs out, and performs RLS-authorized Storage uploads; database reads through the SDK are not used by pages (pages go server-side) |
 
 **Rationale for exactly one Route Handler:**
 
@@ -355,12 +356,13 @@ These run through the **admin client** path (session of an admin user invoking a
 
 ### 3.4 Where auth actions *don't* live
 
-Authentication (signup, confirm, login, reset, logout) **is not** implemented as Server Actions, deliberately:
+Authentication (Google sign-in/out; legacy confirm/reset callbacks) **is not** implemented as Server Actions, deliberately:
 
-- Supabase's JS client handles verification/flows (PKCE, email confirm links, session cookie shaping) natively in the browser.
-- A Server Action would need cookie-wrapping glue (`@supabase/ssr` supports it, but browser-native flows differ minimally) — so MVP uses small **client components** + `@supabase/ssr` cookies and the Next.js 16 proxy (`src/proxy.ts`).
+- The browser starts Supabase Google OAuth (`signInWithOAuth`) and Supabase/Google handle verification and the redirect; `@supabase/ssr` cookie storage carries the PKCE verifier.
+- `/auth/callback` is a Route Handler that exchanges the one-time code with the **server** client so SSR cookies are written before the redirect; legacy `/auth/confirm` and `/auth/link` remain untouched.
+- A Server Action would need cookie-wrapping glue and add no benefit to a provider redirect — so normal-use UI stays a small client component and the Next.js 16 proxy (`src/proxy.ts`) refreshes/validates claims.
 - Result: fewer custom flows to test; the proxy refreshes the session and protected Server Components re-check claims regardless of how auth was initiated.
-- The temporary one-click anonymous sign-in flow has been removed; email/password, magic link, confirmation and password recovery are the supported flows.
+- The one-click anonymous and normal-use email/password/magic-link/recovery UIs have been removed; legacy callbacks remain for verification/rollback, and completing an old recovery link requires restoring the retired reset form from version control.
 
 ### 3.5 Uniform action contract
 

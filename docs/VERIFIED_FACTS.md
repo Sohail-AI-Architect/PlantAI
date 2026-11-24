@@ -66,7 +66,7 @@
 - **Inactivity pausing:** Free projects are **paused after ~1 week of low database activity**. Warning email ~1 week before, confirmation email after. A few real requests/day usually keeps it alive (not guaranteed). Paused projects are restored via dashboard with all data; **restore window is 1 year** (backups retention). No charge for paused projects.
 - **No automatic backups on Free** — DB-only project; plan for manual SQL dumps during development.
 - Pro: **from $25/month** (no inactivity pausing, 8 GB DB, more storage). This is the first "likely future cost" for PlantAI growth.
-- Auth: email/password, magic links, OAuth (e.g. Google) available on Free; SSO (SAML) is not available on Free.
+- Auth: email/password, magic links and OAuth (e.g. Google) are available on Free; SSO (SAML) is not available on Free. PlantAI's normal-use UI uses direct Supabase Google OAuth; Email remains enabled for rollback. Provider configuration and real sign-in E2E are owner-only (`docs/GOOGLE_OAUTH_SETUP.md`).
 
 ## Vercel
 

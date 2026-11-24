@@ -243,11 +243,12 @@ Reachable from `/identify` after a successful request (same route renders the re
 - **No results:** empty state with the closest suggestions (e.g. "Try fewer words, or the scientific name") + link to "Identify a plant instead".
 - Url stays `?q=` only; nested facet params are deferred with the filters.
 
-### 6.6 Auth screens (`/login`, `/signup`, password reset)
+### 6.6 Auth screens (`/login`, `/signup`, `/auth/callback`)
 
-- Minimal, quiet, centered card (max-width 400 px): logo, single-line sub-copy, form fields (email, password with show toggle), primary button, small links ("Forgot password?", "Create account") — no social proof theatrics, no third-party OAuth in MVP (email/password only per `REQUIREMENTS.md`).
-- Same-shell layout as other minimal pages; bottom nav remains for continuity.
-- Password rules communicated plainly; inline validation; error messages never reveal whether an email exists (privacy standard).
+- Minimal, quiet, centered card: logo, one-line sub-copy, and a single accessible **Continue with Google** button. No email, username, password, magic-link, resend, forgot-password or reset-password control appears in normal use.
+- The button shows a clear "Continuing with Google…" loading state, generic accessible error text, and duplicate-click protection. `/auth/callback` is a non-interactive server handoff; legacy password/recovery routes redirect back to Google sign-in.
+- Same-shell layout as other minimal pages; bottom nav remains for continuity. The flow is mobile-friendly and keyboard/screen-reader accessible.
+- Identity handling is delegated to Supabase Google OAuth with PKCE/SSR cookies; no Firebase, custom JWT, or client-supplied identity field. Owner setup is in `docs/GOOGLE_OAUTH_SETUP.md`.
 
 ### 6.7 Contact (`/contact`)
 

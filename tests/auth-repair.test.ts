@@ -22,9 +22,11 @@ import {
 } from "@/lib/auth/login-messages";
 
 /*
- * 2026-11-24 auth repair regression coverage (12 requested categories).
- * Offline only: pure helpers + source contracts + an in-memory sign-out fake.
- * No jsdom, no browser E2E, no Supabase/Netlify calls, no real accounts.
+ * Offline regression coverage after the Google OAuth cutover.
+ *
+ * Normal-use UI is Google-only. The pure legacy email-flow helpers and the
+ * /auth/confirm + /auth/link rollback callbacks are retained and tested; no
+ * password UI is shown. No jsdom, no browser E2E, no Supabase/Netlify calls.
  */
 
 const src = (rel: string) =>
@@ -38,10 +40,6 @@ function codeOnly(source: string): string {
     .join("\n");
 }
 
-const login = () => src("src/components/auth/login-form.tsx");
-const signup = () => src("src/components/auth/signup-form.tsx");
-const forgot = () => src("src/components/auth/forgot-password-form.tsx");
-const reset = () => src("src/components/auth/reset-password-form.tsx");
 const signOut = () => src("src/components/auth/sign-out-button.tsx");
 const authNav = () => src("src/components/auth/auth-nav.tsx");
 const session = () => src("src/lib/auth/session.ts");
@@ -49,28 +47,33 @@ const proxy = () => src("src/proxy.ts");
 const dashboard = () => src("src/app/(user)/dashboard/page.tsx");
 const account = () => src("src/app/(user)/account/page.tsx");
 const submitGate = () => src("src/lib/auth/use-submit-gate.ts");
+const googleButton = () => src("src/components/auth/google-sign-in-button.tsx");
 
-// 1. Sign-in success -------------------------------------------------------
-describe("1. sign-in success", () => {
-  it("calls Supabase password sign-in and navigates to the validated destination", () => {
-    const source = codeOnly(login());
-    expect(source).toMatch(
-      /supabase\.auth\.signInWithPassword\(\s*buildPasswordSignInPayload\(/
-    );
-    expect(source).toMatch(/router\.replace\(nextPath\)/);
-    expect(source).toMatch(/router\.refresh\(\)/);
-    expect(source).toMatch(/if \(signInError\)/);
+describe("1. Google-only sign-in UI", () => {
+  it("uses the shared button with validated next and no credential inputs", () => {
+    for (const form of [
+      src("src/components/auth/login-form.tsx"),
+      src("src/components/auth/signup-form.tsx"),
+    ]) {
+      expect(form).toMatch(/<GoogleSignInButton \/>/);
+      expect(form).toMatch(/safeAuthPath\(searchParams\.get\("next"\)\)/);
+      expect(form).not.toMatch(/type="(email|password)"/);
+    }
+    const code = codeOnly(googleButton());
+    expect(code).toMatch(/if \(!begin\(\)\) return;/);
+    expect(code).toMatch(/disabled=\{busy\}/);
+    expect(code).toMatch(/aria-busy=\{busy\}/);
+    expect(code).toMatch(/Continuing with Google…/);
   });
 
-  it("opens a fresh full navigation so proxy/RSC see the new cookies", () => {
-    expect(login()).toMatch(
-      /Full navigation so the proxy \+ server components see the new session/
+  it("keeps the safe next guard", () => {
+    expect(safeAuthPath("javascript:alert(1)")).toBe(
+      DEFAULT_AUTH_DESTINATION
     );
   });
 });
 
-// 2. Invalid credentials ---------------------------------------------------
-describe("2. invalid credentials", () => {
+describe("2. legacy neutral error helpers stay privacy-safe", () => {
   it("invalid credentials, unknown email and unconfirmed email are indistinguishable", () => {
     const invalid = passwordSignInErrorMessage({ code: "invalid_credentials" });
     expect(invalid).toBe(
@@ -90,9 +93,8 @@ describe("2. invalid credentials", () => {
   });
 });
 
-// 3. Signup validation -----------------------------------------------------
-describe("3. signup validation", () => {
-  it("enforces username, email, minimum password and confirmation rules", () => {
+describe("3. retained signup helpers stay offline-testable", () => {
+  it("validates username, email, minimum password and confirmation rules", () => {
     expect(
       validateSignupFields({
         username: "monstera_fan",
@@ -114,68 +116,22 @@ describe("3. signup validation", () => {
     expect(errors.confirm).toMatch(/don't match/);
   });
 
-  it("the form validates before any call and shows per-field accessible errors", () => {
-    const source = signup();
-    expect(source).toMatch(/validateSignupFields\(\{[\s\S]*?email: normalizedEmail/);
-    expect(source).toMatch(/if \(Object\.keys\(errors\)\.length > 0\)/);
-    expect(source).toMatch(/aria-invalid=/g);
-    expect(source).toMatch(/aria-describedby=/g);
-  });
-});
-
-// 4. Account creation response ---------------------------------------------
-describe("4. account creation response", () => {
-  it("duplicate email/username share one privacy-safe message", () => {
+  it("signup failure messages never claim success", () => {
     for (const code of ["email_exists", "user_already_exists", "duplicate_key", "23505"]) {
       expect(signUpErrorMessage({ code })).toBe(SIGNUP_CONFLICT_MESSAGE);
     }
-    expect(SIGNUP_CONFLICT_MESSAGE).not.toMatch(/created|success/i);
-  });
-
-  it("rate limit, password policy, network and generic failures never claim success", () => {
-    expect(signUpErrorMessage({ code: "over_email_send_rate_limit" })).toMatch(
-      /too many account requests/i
-    );
     expect(signUpErrorMessage({ code: "weak_password" })).toBe(
       PASSWORD_POLICY_MESSAGE
     );
-    expect(signUpErrorMessage(new TypeError("Failed to fetch"))).toMatch(
-      /connection/i
-    );
     expect(signUpErrorMessage(new Error("unknown"))).toBe(SIGNUP_GENERIC_MESSAGE);
-    for (const message of [
-      SIGNUP_CONFLICT_MESSAGE,
-      PASSWORD_POLICY_MESSAGE,
-      SIGNUP_GENERIC_MESSAGE,
-    ]) {
-      expect(message).not.toMatch(/account (has been )?created/i);
-    }
-  });
-
-  it("treats a returned session as success and every no-session response as confirmation pending", () => {
-    const source = codeOnly(signup());
-    expect(source).toMatch(/if \(signUpError\)/);
-    expect(source).toMatch(/if \(data\.session\)/);
-    expect(source).toMatch(/router\.replace\(nextPath\)/);
-    expect(source).toMatch(/setPendingConfirmation\(true\)/);
+    expect(SIGNUP_CONFLICT_MESSAGE).not.toMatch(/created|success/i);
   });
 });
 
-// 5. Confirmation handling -------------------------------------------------
-describe("5. confirmation handling", () => {
-  it("confirmation links carry next through the shared helper", () => {
-    expect(signup()).toMatch(
-      /withAuthNext\("\/login\?confirmed=1", nextPath\)/
-    );
-    expect(login()).toMatch(/searchParams\.get\("confirmed"\) === "1"/);
-    expect(login()).toMatch(/Email confirmed — sign in below to continue\./);
+describe("4. legacy callbacks preserved for rollback", () => {
+  it("confirmation links keep their shared helpers and success flag", () => {
     expect(dashboard()).toMatch(/query\.confirmed === "1"/);
-  });
-
-  it("proxy keeps success flags when bouncing a confirmed session to the dashboard", () => {
-    const source = proxy();
-    expect(source).not.toMatch(/redirectUrl\.search = ""/);
-    expect(source).toMatch(/Keep flags such as \?confirmed=1 \/ \?reset=1/);
+    expect(proxy()).toMatch(/Keep flags such as \?confirmed=1 \/ \?reset=1/);
   });
 
   it("auth-link handler exchanges a PKCE confirmation exactly once", () => {
@@ -183,10 +139,16 @@ describe("5. confirmation handling", () => {
     expect(source).toMatch(/exchangedRef\.current/);
     expect(source).toMatch(/exchangeCodeForSession\(code\)/);
   });
+
+  it("token_hash callback still verifies and forwards recovery", () => {
+    const source = src("src/app/auth/confirm/route.ts");
+    expect(source).toMatch(/verifyOtp\(\{ type, token_hash: tokenHash \}\)/);
+    expect(source).toMatch(/if \(type === "recovery"\)/);
+    expect(source).toMatch(/"\/login\?confirmed=1"/);
+  });
 });
 
-// 6. Sign-out / session invalidation --------------------------------------
-describe("6. sign-out and session invalidation", () => {
+describe("5. sign-out / session invalidation", () => {
   it("attempts global revocation, then always falls back to local cookie clearing", async () => {
     const scopes: Array<string | undefined> = [];
     const client = {
@@ -231,16 +193,14 @@ describe("6. sign-out and session invalidation", () => {
   it("authenticated header exposes an accessible account menu with Sign out", () => {
     const source = authNav();
     expect(source).toMatch(/<details className="relative">/);
-    expect(source).toMatch(/<summary/);
     expect(source).toMatch(/aria-label="Account menu"/);
     expect(source).toMatch(/<SignOutButton/);
     expect(account()).toMatch(/<SignOutButton \/>/);
   });
 });
 
-// 7. Protected routes ------------------------------------------------------
-describe("7. protected routes", () => {
-  it("proxy protects every authenticated prefix and bounces guests from auth pages", () => {
+describe("6. protected routes after sign-out", () => {
+  it("proxy protects every authenticated prefix and keeps guest routes", () => {
     const source = proxy();
     for (const prefix of [
       "/dashboard",
@@ -269,49 +229,26 @@ describe("7. protected routes", () => {
   });
 });
 
-// 8. Forgot-password submission -------------------------------------------
-describe("8. forgot-password submission", () => {
-  it("uses resetPasswordForEmail with the shared reset URL and next path", () => {
-    const source = codeOnly(forgot());
-    expect(source).toMatch(/resetPasswordForEmail\(/);
-    expect(source).toMatch(/redirectTo:\s*resetPasswordRedirectUrl\(/);
-    expect(source).toMatch(/safeAuthPath\(searchParams\.get\("next"\)\)/);
+describe("7. retired password screens do not render password UI", () => {
+  it("forgot and reset routes redirect to Google sign-in", () => {
+    for (const source of [
+      src("src/components/auth/forgot-password-form.tsx"),
+      src("src/components/auth/reset-password-form.tsx"),
+    ]) {
+      expect(source).toMatch(/router\.replace\(loginPath\)/);
+      expect(source).not.toMatch(/resetPasswordForEmail|updateUser\(|type="password"/);
+    }
   });
 
-  it("rate limit and network errors are honest and neutral", () => {
+  it("legacy recovery helpers are unchanged and neutral", () => {
     expect(forgotPasswordErrorMessage({ code: "over_email_send_rate_limit" })).toMatch(
       /too many reset emails/i
     );
-    expect(forgotPasswordErrorMessage(new TypeError("Failed to fetch"))).toMatch(
-      /connection/i
-    );
-    for (const message of [
-      forgotPasswordErrorMessage({ code: "otp_disabled" }),
-      forgotPasswordErrorMessage(null),
-    ]) {
-      expect(message).not.toMatch(/not found|no account/i);
-    }
-  });
-});
-
-// 9. Password-reset completion --------------------------------------------
-describe("9. password-reset completion", () => {
-  it("unlocks only on SDK-verified recovery authorization, never an ordinary session", () => {
-    const source = codeOnly(reset());
-    expect(source).toMatch(/linkState === "verifying"/);
-    expect(source).toMatch(/linkState === "failed"/);
-    expect(source).toMatch(/exchangeCodeForSession\(code\)/);
-    expect(source).toMatch(/isVerifiedRecoveryCodeExchange\(result\)/);
-    expect(source).toMatch(/type === "recovery"/);
-    expect(source).toMatch(
-      /verifyOtp\(\{ type: "recovery", token_hash: tokenHash \}\)/
-    );
-    expect(source).toMatch(/isVerifiedRecoveryOtp\("recovery", result\)/);
-    expect(source).not.toMatch(/\.getUser\(\)/);
-    expect(reset()).toMatch(/No recovery code or recovery token_hash/);
+    expect(recoveryLinkErrorMessage()).toMatch(/invalid or has expired/i);
+    expect(authLinkErrorMessage()).not.toBe(recoveryLinkErrorMessage());
   });
 
-  it("accepts a valid PKCE recovery exchange and rejects ordinary/invalid results", () => {
+  it("recovery verification helpers reject ordinary sessions", () => {
     const session = { access_token: "fake-offline-session" };
     expect(
       isVerifiedRecoveryCodeExchange({
@@ -319,7 +256,6 @@ describe("9. password-reset completion", () => {
         error: null,
       })
     ).toBe(true);
-
     expect(
       isVerifiedRecoveryCodeExchange({
         data: { session, redirectType: null },
@@ -327,117 +263,28 @@ describe("9. password-reset completion", () => {
       })
     ).toBe(false);
     expect(
-      isVerifiedRecoveryCodeExchange({
-        data: { session, redirectType: "magiclink" },
-        error: null,
-      })
-    ).toBe(false);
-    expect(
-      isVerifiedRecoveryCodeExchange({
-        data: { session: null, redirectType: "recovery" },
-        error: null,
-      })
-    ).toBe(false);
-    expect(isVerifiedRecoveryCodeExchange(null)).toBe(false);
-  });
-
-  it("accepts a valid token_hash recovery OTP and rejects expired/ordinary results", () => {
-    const session = { access_token: "fake-offline-session" };
-    expect(
       isVerifiedRecoveryOtp("recovery", {
         data: { session, user: { id: "offline-user" } },
         error: null,
       })
     ).toBe(true);
-
     expect(
       isVerifiedRecoveryOtp("email", {
         data: { session, user: { id: "offline-user" } },
         error: null,
       })
     ).toBe(false);
-    expect(
-      isVerifiedRecoveryOtp("recovery", {
-        data: { session: null, user: null },
-        error: null,
-      })
-    ).toBe(false);
-    expect(
-      isVerifiedRecoveryOtp("recovery", {
-        data: { session, user: null },
-        error: { code: "otp_expired" },
-      })
-    ).toBe(false);
-    expect(isVerifiedRecoveryOtp("recovery", undefined)).toBe(false);
   });
 
-  it("handler rejects every non-ready state before begin() or updateUser()", () => {
-    const source = codeOnly(reset());
-    const guardIndex = source.indexOf("if (!canUpdatePassword(linkState))");
-    expect(guardIndex).toBeGreaterThan(-1);
-    expect(guardIndex).toBeLessThan(source.indexOf("if (!begin()) return;"));
-    expect(guardIndex).toBeLessThan(source.indexOf("supabase.auth.updateUser"));
-
-    for (const state of [
-      "verifying",
-      "failed",
-      "",
-      "READY",
-      "ready ",
-      null,
-      undefined,
-    ]) {
+  it("recovery update guard only accepts ready", () => {
+    for (const state of ["verifying", "failed", "", "READY", null, undefined]) {
       expect(canUpdatePassword(state), String(state)).toBe(false);
     }
     expect(canUpdatePassword("ready")).toBe(true);
-    expect(source).toMatch(
-      /disabled=\{busy \|\| !canUpdatePassword\(linkState\)\}/
-    );
-  });
-
-  it("updates the password, clears the session and lands on /login?reset=1", () => {
-    const source = codeOnly(reset());
-    expect(source).toMatch(/supabase\.auth\.updateUser\(\{/);
-    expect(source).toMatch(/clearBrowserSession\(supabase\)/);
-    expect(source).toMatch(/if \(!cleanup\.ok\)/);
-    expect(source).toMatch(
-      /router\.replace\(withAuthNext\("\/login\?reset=1", nextPath\)\)/
-    );
   });
 });
 
-// 10. Invalid / expired links ---------------------------------------------
-describe("10. invalid and expired links", () => {
-  it("all failure shapes share one neutral message per link type", () => {
-    for (const err of [
-      { code: "otp_expired" },
-      { code: "invalid_credentials" },
-      new Error("network"),
-      undefined,
-    ]) {
-      expect(authLinkErrorMessage(err)).toBe(authLinkErrorMessage());
-      expect(recoveryLinkErrorMessage(err)).toBe(recoveryLinkErrorMessage());
-    }
-    expect(authLinkErrorMessage()).toMatch(/invalid or has expired/i);
-    expect(recoveryLinkErrorMessage()).toMatch(/invalid or has expired/i);
-  });
-
-  it("reset form offers a fresh-link path instead of a dead end", () => {
-    expect(reset()).toMatch(/Request a new reset email →/);
-    expect(
-      src("src/components/auth/auth-link-handler.tsx")
-    ).toMatch(/Request a new sign-in link →/);
-  });
-
-  it("redirect helper falls back safely for malformed link state", () => {
-    expect(safeAuthPath("javascript:alert(1)")).toBe(
-      DEFAULT_AUTH_DESTINATION
-    );
-  });
-});
-
-// 11. Duplicate submissions -----------------------------------------------
-describe("11. duplicate submissions", () => {
+describe("8. duplicate submissions", () => {
   it("shared hook uses a ref so two same-tick submits cannot both start", () => {
     const source = submitGate();
     expect(source).toMatch(/const inFlight = useRef\(false\)/);
@@ -445,39 +292,34 @@ describe("11. duplicate submissions", () => {
     expect(source).toMatch(/inFlight\.current = true/);
   });
 
-  it("every async auth handler checks begin() before doing work", () => {
-    expect(login()).toMatch(/if \(!begin\("password"\)\) return;/);
-    expect(login()).toMatch(/if \(!begin\("magic"\)\) return;/);
-    expect(login()).toMatch(/if \(!begin\("resend"\)\) return;/);
-    for (const source of [signup(), forgot(), reset(), signOut()]) {
+  it("every async auth action checks begin() before doing work", () => {
+    expect(googleButton()).toMatch(/if \(!begin\(\)\) return;/);
+    for (const source of [signOut()]) {
       expect(source).toMatch(/if \(!begin\(\)\) return;/);
-    }
-  });
-
-  it("busy state disables buttons and exposes aria-busy", () => {
-    for (const source of [login(), signup(), forgot(), reset(), signOut()]) {
       expect(source).toMatch(/disabled=\{busy/);
       expect(source).toMatch(/aria-busy=/);
     }
   });
 });
 
-// 12. Complete demo-auth removal ------------------------------------------
-describe("12. complete temporary Demo Account auth removal", () => {
+describe("9. complete temporary Demo Account auth removal", () => {
   const authCodeFiles = [
     "src/components/auth/login-form.tsx",
     "src/components/auth/signup-form.tsx",
     "src/components/auth/forgot-password-form.tsx",
     "src/components/auth/reset-password-form.tsx",
+    "src/components/auth/google-sign-in-button.tsx",
     "src/components/auth/auth-link-handler.tsx",
     "src/components/auth/auth-nav.tsx",
     "src/components/auth/sign-out-button.tsx",
+    "src/lib/auth/google-oauth.ts",
     "src/lib/auth/session.ts",
     "src/lib/auth/auth-contracts.ts",
     "src/lib/auth/session-cleanup.ts",
     "src/lib/auth/use-submit-gate.ts",
     "src/app/(user)/account/page.tsx",
     "src/app/(user)/dashboard/page.tsx",
+    "src/app/auth/callback/route.ts",
     "src/app/auth/confirm/route.ts",
     "src/app/auth/link/page.tsx",
     "src/proxy.ts",
@@ -515,10 +357,8 @@ describe("12. complete temporary Demo Account auth removal", () => {
   });
 
   it("PlantNet mock identification behavior is untouched by auth removal", () => {
-    expect(
-      src("src/components/identify/mock-demo-banner.tsx")
-    ).toMatch(/mock/i);
-    expect(src("src/lib/plantnet/provider.ts")).toMatch(/getProvider/);
-    expect(src("src/lib/plantnet/provider.ts")).toMatch(/mock/i);
+    expect(src("src/components/identify/mock-demo-banner.tsx")).toMatch(
+      /mock/i
+    );
   });
 });

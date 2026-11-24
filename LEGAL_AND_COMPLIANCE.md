@@ -63,8 +63,8 @@ Mandatory sections to write at authoring time:
 
 | Data | Collected? | Notes |
 |---|---|---|
-| Email | Yes (registered users) | Supabase auth credential |
-| Display name | Optional | Explicitly optional at signup |
+| Verified email / Google identity | Yes (registered users) | Supabase Auth receives it from Google at sign-in; no PlantAI password UI |
+| Display name | Optional | Not collected by the Google sign-in UI; existing profile fields are unchanged |
 | Identification photos | Yes | Uploaded for ID; private storage bucket (DATABASE_SCHEMA.md, SECURITY.md) |
 | Species results / identification history | Yes | Rows tied to the account |
 | Coarse GPS / location | **Not sent in MVP** (Stage A1, 2026-11-12) | PlantAI's MVP sends **no GPS coordinates to Pl@ntNet**; the coarse-GPS consent flow remains a documented future option solely for regional-flora restriction, gated on explicit consent + a privacy disclosure if ever adopted (AI_INTEGRATION_PLAN.md §2.1) |
@@ -83,7 +83,7 @@ Mandatory sections to write at authoring time:
 | Technical logs / anti-abuse | Legitimate interest |
 | Location use | Consent (explicit, revocable) |
 | Advertising cookies (Phase 5+) | Consent (EU/UK) |
-| Service emails (magic links, confirmations) | Performance of contract |
+| Service emails for legacy rollback/outstanding links only | Performance of contract |
 
 ### 2.5 Retention
 | Item | Default | On request |

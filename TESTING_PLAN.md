@@ -141,7 +141,7 @@ Planned E2E scenarios (Playwright is **not installed/configured** in this repo; 
 | # | Scenario | Steps | Asserts |
 |---|---|---|---|
 | 1 | **Visitor identifies plant (anonymous)** | Open home → upload 1 fixture image → get result | Results shown; confidence rendered; no auth prompt needed; rate-limit message appears on 6th attempt (mocked) |
-| 2 | **Authed user full loop** *(not run; needs owner-approved test user)* | Sign in with a normal email/password test account (no one-click anonymous sign-in exists) → identify → save result → open My Plants → see saved plant → delete it | End-to-end persistence via app surfaces only |
+| 2 | **Authed user full loop** *(not run; needs owner-enabled provider and approved test account)* | Sign in with **Continue with Google** (no one-click anonymous sign-in exists) → identify → save result → open My Plants → see saved plant → delete it | End-to-end persistence via app surfaces only |
 | 3 | **Library search** | Open Plant Library → type search term → filter matches → open plant detail | Search is a client/DB query (specifier per Architektur); no upstream call |
 | 4 | **Login / logout** *(not run; needs owner-approved test user)* | Sign in → sign out → protected route bounce to `/login` → refresh cannot restore session | Proxy + server guards work |
 | 5 | **Contact form** | Fill form → submit → success message → honeypot-triggered fake bot submission is silently dropped | No real email needed in MVP |
@@ -266,7 +266,7 @@ Map [`REQUIREMENTS.md`](REQUIREMENTS.md) FR/NFR IDs → test artifacts. Maintain
 | FR-ID + authenticated identify flow | Core UX | E2E #2; integration §4.2 |
 | FR-RATE + per-IP/per-user limits | Abuse resistance | Unit #5; API contract #5; Security checklist item |
 | FR-UPLOAD + only jpg/png ≤10 MB 1–3 images | Input gate | Unit #1; API contract #2,3,4 |
-| FR-AUTH + email confirm + login/magic link | Account gate | Integration §4.1 matrix; E2E #4 |
+| FR-AUTH + Google OAuth + PKCE callback + safe `next` | Account gate | Offline OAuth contracts (`tests/google-oauth.test.ts`); integration §4.1 matrix; E2E #4 (owner-only) |
 | FR-LIBRARY + plant library public browse | Content | E2E #3; RLS matrix read row |
 | FR-SAVE + save identifications / My Plants | Phase 4 | E2E #2; RLS matrix user rows |
 | FR-CONTACT + contact form | Content/SEO | E2E #5; abuse checklist |

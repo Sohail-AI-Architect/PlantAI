@@ -4,7 +4,7 @@
 > Facts about Pl@ntNet, Supabase, and the stack (quotas, plans, terms) are cited from [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md). Anything stated here without a source below is **UNVERIFIED** until checked at implementation time.
 > Related: [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) · [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) · [`ENVIRONMENT_SETUP.md`](ENVIRONMENT_SETUP.md) · [`LEGAL_AND_COMPLIANCE.md`](LEGAL_AND_COMPLIANCE.md) · [`TESTING_PLAN.md`](TESTING_PLAN.md)
 >
-> **Auth repair status (2026-11-24):** session identity is verified server-side via `auth.getClaims()` (`src/lib/auth/session.ts`, `src/proxy.ts`) — `getSession()` user data is never trusted for authorization. Auth form inputs are validated client-side before calling Supabase Auth; Supabase enforces account/password rules server-side, and route guards verify claims again on protected pages. Auth error messages are privacy-safe (never reveal account existence). The temporary one-click anonymous sign-in UI has been removed. `.env.local` verified git-ignored; no service-role key reaches client bundles; no raw IPs are logged — only a salted SHA-256 hash feeds the in-memory counter. Mock identification responses are transparently labelled (`mode:"mock"` + `mockNotice`) and never presented as real AI output.
+> **Auth status (2026-11-24):** normal-use sign-in is direct Supabase Google OAuth with PKCE and SSR cookies; session identity is still verified server-side via `auth.getClaims()` (`src/lib/auth/session.ts`, `src/proxy.ts`) — `getSession()` user data is never trusted for authorization. No PlantAI password/magic-link UI is shown; legacy email callbacks remain for rollback. Auth error messages are privacy-safe and never echo provider details. Provider configuration and real Google E2E are owner-only (`docs/GOOGLE_OAUTH_SETUP.md`). `.env.local` verified git-ignored; no service-role key reaches client bundles; no raw IPs are logged — only a salted SHA-256 hash feeds the in-memory counter. Mock identification responses are transparently labelled (`mode:"mock"` + `mockNotice`) and never presented as real AI output.
 
 ---
 
@@ -101,10 +101,10 @@ The API key is treated as the most abusable secret (its abuse directly consumes 
 
 ## 4. Authentication security
 
-- **Provider: Supabase Auth only.** Email/password + magic link in MVP; Google OAuth explicitly deferred. **No custom password hashing scheme, no custom session tokens, no custom JWT handling** — we use Supabase's primitives.
-- **Email confirmation required.** Supabase project setting: confirm-signup on. Signups with unconfirmed emails cannot log in and have no `profiles` row created (our DB trigger creates it only post-confirm — pattern to verify at scaffold; UNVERIFIED which exact trigger hook Supabase exposes).
-- **Password policy.** Minimum length **8** enforced client + server side (Supabase has a min-length project setting too). Optional hardening: `zxcvbn` strength check UX-side (warn, don't block) — decision deferred; if added, it is a client-side library and must be judged fairly (adds bundle weight).
-- **Login throttling.** Supabase Auth has built-in rate limiting / brute-force protection on auth endpoints (commonly cited as 1 req / 60 s on sensitive auth routes historically — **UNVERIFIED** value; verify current dashboard limits at scaffold). PlantAI additionally rate-limits the app's own login endpoints server-side as a defensive layer (see §7).
+- **Provider: Supabase Auth only.** Normal-use sign-in is direct Google OAuth with PKCE; Email remains enabled only for rollback/outstanding links. **No Firebase, custom password hashing, custom session tokens, custom JWT handling or custom identity merge** — Supabase owns account creation, verified automatic identity linking, canonical UUIDs and sessions. Owner setup is in [`docs/GOOGLE_OAUTH_SETUP.md`](docs/GOOGLE_OAUTH_SETUP.md).
+- **Verified provider email.** Supabase links a Google identity to an existing account only when its verified email matches. Different verified Google emails remain independent UUID accounts. The callback fails closed on missing code, provider error, or an exchange without a verified session/user id.
+- **No PlantAI password.** `/login` and `/signup` expose no email, password, magic-link, resend-confirmation, forgot-password or reset-password control. Legacy `/auth/confirm` and `/auth/link` routes/helpers are retained for verification/rollback; the retired reset form is not rendered, so completing an old recovery link requires restoring that form from version control.
+- **Provider throttling.** Supabase Auth and Google enforce their own rate limits (exact values **UNVERIFIED** and owner-observable); PlantAI does not implement a local password endpoint. App-side identify/contact rate limits are unchanged (§7).
 - **Session handling.**
   - Sessions are Supabase-issued JWTs with default refresh-token behavior; the app uses `@supabase/ssr`-style cookie-based session storage so tokens live in httpOnly cookies, not localStorage (XSS theft risk reduced).
   - Logout attempts global refresh-token revocation first, then always falls back to `signOut({ scope: "local" })` if the auth endpoint is unreachable, so this browser's cookies are cleared even offline. Server-side revocation is best-effort; already-issued access JWTs cannot be recalled before expiry.
@@ -114,7 +114,7 @@ The API key is treated as the most abusable secret (its abuse directly consumes 
   - `profiles.role` values `'user' | 'admin'` only; an RLS trigger/policy rejects any update of `role` by non-admins.
   - A Postgres `SECURITY DEFINER` helper `is_admin()` (or equivalent claim + policy check — pattern decision documented in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md)) provides the RLS gate for admin-only tables (`blog_posts` moderation, `contact_messages`, `app_settings`).
   - Admin surfaces additionally check `role` server-side (Server Actions never rely on client state).
-- **Magic link expiry** uses Supabase defaults; we do not extend expiries for convenience.
+- **OAuth `next` redirects** are re-validated with `safeAuthPath()` at both the button and callback; protocol-relative, backslash-normalized, absolute and control-character values fall back to `/dashboard`. Legacy email-link expiry still uses Supabase defaults.
 
 ---
 
@@ -168,7 +168,7 @@ Per CANONICAL DECISION #4: per-IP + per-user counters; anonymous 5/day, authenti
 | **Storage stuffing** (upload infinite images to fill the 1 GB bucket) | valid-but-useless images to `request-images` | Only images paired with a *successful or attempted* identification are kept; per-user object cap (e.g. keep last N=10 uploads/user/day — configurable); Phase 4 auto-delete aligns with §9 retention | Anonymous bucket path unbounded by accounts — mitigated by per-IP identify cap that necessarily precedes storage writes |
 | **Contact spam** | contact form | Honeypot + timing + per-IP cap | Targeted manual spam slips through; admin UI has bulk delete (Phase 4) |
 | **ID guessing** (enumerate other users' identifications/data) | GET endpoints / storage paths | RLS everywhere + signed URLs with unguessable UUIDs; no sequential IDs exposed; object keys are UUIDs, not filenames | Low |
-| **Login brute-force** | auth endpoints | Supabase built-in throttling (UNVERIFIED limits) + our own per-IP per-endpoint rate limit + 8-char min password + email confirm requirement | Credential stuffing on weak reused passwords; out of MVP scope |
+| **OAuth abuse / session theft** | Google or Supabase auth endpoints | Owner-controlled Google OAuth client + Supabase redirect allowlist + PKCE + SSR httpOnly cookies + `getClaims()` route guards; no PlantAI password endpoint | Provider-level account/link correctness depends on owner configuration; real E2E pending |
 
 ---
 
@@ -208,8 +208,8 @@ Minimum is the maximum security here — we simply don't collect what we don't n
 
 | Data | Collected? | Purpose | Removed/anonymized |
 |---|---|---|---|
-| Email (Supabase Auth) | Yes, on signup | Login + magic link + password reset | On account deletion |
-| Password hash | Yes (Supabase-managed) | Auth | On account deletion |
+| Verified email / Google identity (Supabase Auth) | Yes, from Google at sign-in | Account creation, automatic linking, returning sign-in | On account deletion |
+| Password hash | Legacy rollback accounts only; no PlantAI password UI | Not used by normal-use Google flow | On account deletion |
 | Photo(s) (identification images) | Yes, transient | Pl@ntNet identify | **90-day retention default** → deleted from `request-images` by cleanup job or manual cron (decision: automated cron if Vercel Cron + a service-role endpoint is cheapest; manual dashboard cleanup as fallback — decision to finalize in Phase 4/5, 90 days is the default retention from today). EXIF/GPS stripped client-side best-effort, not stored server-side |
 | Species result / confidence | Yes | Show results, save to plant library | On account deletion |
 | Coarse location | **No in MVP.** GPS coordinates are excluded entirely; no explicit consent gating is needed for them — if future features (region-aware floras, disease coverage) need GPS, they will be added only behind **explicit user consent** UI toggle, opt-in, and deletable with account data | — |
@@ -227,12 +227,12 @@ Minimum is the maximum security here — we simply don't collect what we don't n
 | OWASP category (2021) | PlantAI exposure | Mitigation | Status |
 |---|---|---|---|
 | A01 Broken Access Control | Users reading others' data; admin reach | RLS on ALL tables + `is_admin()`; middleware as UX guard only; Server Actions re-check auth server-side | Core control |
-| A02 Cryptographic Failures | Passwords, tokens | Handled by Supabase Auth (argon-something/bcrypt+drizzle of hash choices is ours to not break); HTTPS enforced by Vercel/Supabase defaults; no client-side crypto rollup | Inherited, don't break |
+| A02 Cryptographic Failures | OAuth tokens, sessions, legacy password hashes | Handled by Supabase/Google over HTTPS; PKCE + SSR cookies; no client-side crypto rollup and no custom JWT handling | Inherited, don't break |
 | A03 Injection | SQL, XSS | supabase-js parameterized queries; PostgREST operator filters; no string-concatenated SQL. XSS: React escapes by default; `dangerouslySetInnerHTML` only for sanitized blog body — sanitizer decision **deferred to Phase 4**, candidate `isomorphic-dompurify` (note: it brings DOMPurify + jsdom quirks; revisit then). No SVG file uploads (§6) | Control defined; sanitizer choice Phase 4 |
 | A04 Insecure Design | Quota starvation, storage stuffing | §7 abuse table; graceful 503 with user-facing message | Design control |
 | A05 Security Misconfiguration | Loose headers, open buckets §6 storage policies; security headers §11; no public `request-images` | Config review gate in [`TESTING_PLAN.md`](TESTING_PLAN.md) | Control defined |
 | A06 Vulnerable Components | npm supply chain | Lockfile committed; `npm audit` in CI from Phase 5 (optional); "no random small deps" rule; fix-on-alert | Documented |
-| A07 Identification & Authentication Failures | Brute force, session theft | Supabase auth + built-in throttling (limits UNVERIFIED) + our rate limit; httpOnly cookie sessions; email confirmation required | §4 |
+| A07 Identification & Authentication Failures | Brute force, session theft, unsafe redirects | Supabase Google OAuth + PKCE + verified-email linking + safe `next` re-validation + httpOnly cookie sessions + `getClaims()` guards; Email retained only for rollback | §4; real provider E2E owner-owned |
 | A08 Software & Data Integrity | Supply chain, tampered deploys | Vercel deploys from protected `main`; no auto-publish to prod without preview review; GitHub branch protection (free) | Documented |
 | A09 Logging & Monitoring Failures | Silent abuse | MVP = console/Vercel logs of: identify requests (result + quota-remaining + rate-limit decisions), auth failures; not a full SIEM | Best-effort, accepted (§14) |
 | A10 SSRF | Our server fetching attacker URLs | We never fetch arbitrary URLs; outbound calls only to Pl@ntNet (fixed host) and Supabase | Not applicable by design |

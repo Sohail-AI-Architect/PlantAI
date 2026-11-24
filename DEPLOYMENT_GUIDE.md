@@ -67,7 +67,7 @@ Three environments. Differences that actually matter:
 | **Pl@ntNet mode/key** | `PLANTNET_MODE=mock`; key may be present but no live calls | `PLANTNET_MODE=mock` even if a key is present; do not call the API | owner-approved `PLANTNET_MODE=live` + valid key; otherwise keep `mock` |
 | **`NEXT_PUBLIC_SITE_URL`** | `http://localhost:3000` | preview URL (set per branch in Vercel or computed) | production URL |
 | **Env var scope in Vercel** | `.env.local` (git-ignored) | "Preview" environment in Vercel dashboard | "Production" environment in Vercel dashboard |
-| **Auth redirect URLs** | `http://localhost:3000/**` in Supabase dashboard | each preview domain added to Supabase Auth redirect allowlist | `https://<prod-domain>/**` |
+| **Auth redirect URLs** | `http://127.0.0.1:3000/**` and `http://localhost:3000/**` in Supabase dashboard | each preview domain actually used added to Supabase Auth redirect allowlist | `https://strong-mochi-e3869f.netlify.app/**` (or later canonical domain) |
 | **Error monitoring** | terminal / browser console | Vercel deploy logs | Vercel runtime logs (Hobby log retention is limited — **UNVERIFIED** exact hours; treat as very short. See §7.) |
 | **Purpose** | build features | validate the PR in a production-like build | serve users |
 
@@ -245,16 +245,29 @@ Create in the **prod** project (and mirror in dev):
 
 ### 5.4 Auth configuration
 
-In each project (Dashboard → Authentication), configure:
+Normal-use auth is direct Supabase Google OAuth. The complete owner-only
+Google Cloud/Supabase provider checklist is in
+[`docs/GOOGLE_OAUTH_SETUP.md`](docs/GOOGLE_OAUTH_SETUP.md). In each Supabase
+project (Dashboard → Authentication), the owner must:
 
-- **Email confirmation: ON** ("Confirm email" toggle). This generates the standard signed-up-but-unconfirmed flow. Confirmations emails are sent by Supabase's built-in email service — rate limits on Free are **UNVERIFIED** (not stated in `docs/VERIFIED_FACTS.md`); PLANTAI assumes basic-limits-only behavior and accepts it for MVP volume. If deliverability becomes a problem, add custom SMTP credentials (free providers exist, e.g. a transactional free tier) — a config change, not a code change.
-- **Redirect URLs** (Auth → URL Configuration) — allowlist **all** of:
-  - `http://localhost:3000/**` (local)
-  - every preview host: `https://plantai-git-*.vercel.app/**` (or the specific hostnames Vercel generates per PR)
-  - production: `https://<prod-domain>/**` (update when custom domain lands, §8)
-- **Site URL** field: production URL.
-- **Signups:** keep open (do not disable), per project decision. If spam becomes an issue later, add a CAPTCHA/config rather than closing registration.
-- Email templates: edit subject/body copy; keep the `{{ .ConfirmURL }}`/`{{ .Token }}` tokens intact.
+- Enable **Google** with the owner-created OAuth client ID/secret and use the
+  exact Supabase callback URL shown in the provider form.
+- **Redirect URLs** (Auth → URL Configuration) — allowlist **all** origins that
+  can start the flow:
+  - local: `http://127.0.0.1:3000/**` and `http://localhost:3000/**`
+  - every preview host actually used: `https://plantai-git-*.vercel.app/**`
+  - production: `https://strong-mochi-e3869f.netlify.app/**` (and any later
+    custom domain, §8)
+- Set the **Site URL** to the canonical production origin. The app builds
+  `redirectTo` from the browser's current origin, so that origin must be
+  allowlisted.
+- Keep **Email** enabled for rollback and keep **signups** open. Do not delete
+  users, identities, profiles, RLS policies or Storage policies.
+- Legacy email templates/callbacks remain for outstanding links only; they are
+  not part of normal-use UI.
+
+No Google credential is stored in PlantAI source or environment variables.
+Real Google sign-in success is **not** claimed by local/offline tests.
 
 ### 5.5 Pausing behavior (documented, not feared)
 
@@ -306,7 +319,7 @@ Pre-flight — run top to bottom the day before / of enabling production traffic
 | 3 | Migrations applied to **prod** Supabase (all of `supabase/migrations/`) | SQL editor or `npx supabase db push` (§5.2); confirm via Table Editor row counts matching `DATABASE_SCHEMA.md` | ✅ yes |
 | 4 | RLS policies enabled and validated on every table per `DATABASE_SCHEMA.md` + `SECURITY.md` | SQL editor: `SELECT relname, relrowsecurity FROM pg_class JOIN pg_namespace ...` (or Supabase dashboard "RLS enabled" indicator), plus manual anon-select query check | ✅ yes |
 | 5 | Storage buckets exist with correct policies (`plant-images` public read; `request-images` owner-only) | Supabase Dashboard → Storage; attempt an anonymous read/write test | ✅ yes |
-| 6 | Auth redirects allowlist includes the **prod URL** and email confirmation is ON | Supabase Auth settings (§5.4) | ✅ yes |
+| 6 | Google provider enabled, Supabase callback registered, and redirects allowlist includes the **prod origin** | Supabase Auth settings (§5.4 + `docs/GOOGLE_OAUTH_SETUP.md`); Email provider still enabled for rollback | ✅ yes |
 | 7 | Vercel env vars set with correct Per-Scope values; secret values are NOT `NEXT_PUBLIC_`-prefixed | Vercel Project → Settings → Environment Variables (§6) | ✅ yes |
 | 8 | `robots.txt` serves and allows production crawling | `curl`/browser: `https://<prod-url>/robots.txt` | ✅ yes (SEO-blocking otherwise, see `SEO_STRATEGY.md`) |
 | 9 | `sitemap.xml` reachable and lists current routes | `https://<prod-url>/sitemap.xml` | ✅ yes |
@@ -343,7 +356,7 @@ Run this immediately after the first production deploy (and again after any larg
 |---|---|---|
 | 1 | Every primary route returns `200` | `/`, plant detail sample, about, contact, sitemap, robots | 
 | 2 | `/identify` end-to-end **anonymous** | upload a photo → get a JSON response with results; anonymous rate per `SECURITY.md` |
-| 3 | Auth loop works | sign up → receive confirmation email (Supabase built-in email; limits UNVERIFIED) → confirm → sign in → sign out |
+| 3 | Google auth loop works | `/login` and `/signup` → Continue with Google → verified callback + cookies → protected `?next=` → sign out → protected route redirects; owner-only E2E |
 | 4 | Contact form delivers | row appears in `contact_messages` in the prod Supabase table (see `DATABASE_SCHEMA.md`) |
 | 5 | RLS holds from anonymous exports | `curl` the Supabase REST API with only the anon key and attempt a SELECT on a protected table (e.g. `user_plants`, `request-images`): expect empty/403, NOT data. Example: `curl "https://<ref>.supabase.co/rest/v1/user_plants?select=*" -H "apikey: <anon>" -H "Authorization: Bearer <anon>"` |
 | 6 | Lighthouse quick run | Chrome DevTools → Lighthouse on the home page; record scores in `CHANGELOG.md`. Perf budget per `SEO_STRATEGY.md` |
