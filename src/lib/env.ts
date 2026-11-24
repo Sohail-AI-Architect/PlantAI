@@ -87,15 +87,17 @@ export function getServerSupabaseSecretKey(): ServerSecretKey {
 }
 
 /**
- * Identification provider mode (Phase 2, mock-first per the owner-approved
- * plan + AI_INTEGRATION_PLAN.md).
+ * Identification provider mode.
  *
- * Default: "mock" — if no explicit production provider configuration exists
- * (mode unset, or mode=live without an API key), the app runs the local
- * deterministic mock provider. It never performs external calls and is
- * always clearly labelled in UI + API responses. Live Pl@ntNet integration
- * requires PLANTNET_MODE=live AND a server-only PLANTNET_API_KEY AND
- * explicit owner approval.
+ * Live identification is enabled by ONE setting: a non-blank server-only
+ * `PLANTNET_API_KEY`. When the key is present the live Pl@ntNet provider is
+ * used; when it is missing or blank the app falls back to the deterministic
+ * local mock provider (no external calls), and the route reports the service
+ * as not configured in production instead of presenting sample matches.
+ *
+ * `PLANTNET_MODE` is no longer required. It is still read for a loud
+ * diagnostic when someone sets `PLANTNET_MODE=live` without a key, so a
+ * half-configured deployment is easy to spot in the logs.
  */
 export type PlantnetMode = "mock" | "live";
 
@@ -111,17 +113,16 @@ export function getPlantnetApiKey(): string | null {
 }
 
 export function getPlantnetMode(): PlantnetMode {
-  const raw = (process.env.PLANTNET_MODE ?? "mock").trim().toLowerCase();
-  if (raw === "live") {
-    if (!getPlantnetApiKey()) {
-      // Live mode requested but unconfigured — fail safe to mock, loudly.
-      console.error(
-        "PLANTNET_MODE=live is set but PLANTNET_API_KEY is missing or blank; " +
-          "falling back to mock mode. Live identification stays disabled."
-      );
-      return "mock";
-    }
-    return "live";
+  if (getPlantnetApiKey()) return "live";
+
+  const requested = (process.env.PLANTNET_MODE ?? "").trim().toLowerCase();
+  if (requested === "live") {
+    // Live was asked for but the key is missing/blank — fail safe to mock,
+    // loudly. The key value itself is never logged.
+    console.error(
+      "PLANTNET_MODE=live is set but PLANTNET_API_KEY is missing or blank; " +
+        "falling back to mock mode. Add the server-only PLANTNET_API_KEY to enable live identification."
+    );
   }
   return "mock";
 }

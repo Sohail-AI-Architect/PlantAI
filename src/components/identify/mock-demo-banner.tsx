@@ -1,9 +1,9 @@
 /*
- * Mock-mode transparency banner (owner requirement: a mock result must
- * NEVER be presented as a real AI identification).
+ * Sample-data notice for the local/dev mock provider.
  *
- * Shown in the results view whenever `mode === "mock"`, mirroring the
- * API's `mockNotice` field (API_DOCUMENTATION.md §2.6 additive fields).
+ * Live identification runs whenever PLANTNET_API_KEY is configured, so this
+ * banner is only shown when the app is running on built-in sample data. It
+ * keeps that honest without claiming live identification is "coming later".
  */
 export function MockDemoBanner() {
   return (
@@ -11,12 +11,10 @@ export function MockDemoBanner() {
       role="status"
       className="border-warning/30 bg-warning/10 text-warning rounded-lg border px-4 py-3 text-sm"
     >
-      <p className="font-semibold">Demo result — testing mode</p>
+      <p className="font-semibold">Sample data — not a live identification</p>
       <p className="mt-1">
-        PlantAI is running in demonstration mode. This is{" "}
-        <strong>not a real AI identification</strong> — results come from
-        built-in example data. Real Pl@ntNet identification is switched on in
-        a later phase.
+        Live Pl@ntNet identification isn&apos;t enabled on this server right
+        now, so the matches below come from built-in sample data.
       </p>
     </div>
   );

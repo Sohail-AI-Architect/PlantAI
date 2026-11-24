@@ -235,7 +235,7 @@ describe("POST /api/identify — mock success path (structure parity)", () => {
     expect(body.cached).toBe(false);
     expect(body.mode).toBe("mock");
     expect(body.mockNotice).toBe(
-      "Demo result — PlantAI testing mode. This is not a real AI identification."
+      "Sample data — this result did not come from live Pl@ntNet identification."
     );
     expect(body.identificationId).toMatch(UUID_RE); // fallback id (persistence OFF)
     expect(typeof body.remainingQuota).toBe("number");
@@ -332,6 +332,28 @@ describe("POST /api/identify — mock success path (structure parity)", () => {
 /* ------------------------------------------------------------------ */
 /* Validation + rate-limit behavior (unchanged contracts)               */
 /* ------------------------------------------------------------------ */
+
+describe("POST /api/identify — production configuration gate", () => {
+  it("returns a clean 503 provider_unavailable when no PLANTNET_API_KEY is configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(makeRequest({ ip: "198.51.100.90" }));
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe("provider_unavailable");
+      expect(body.error.message).not.toMatch(/plantnet|api[_-]?key/i);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      // The missing key is a server-config problem: no quota is consumed.
+      expect(res.headers.get("X-RateLimit-Remaining")).toBe("5");
+      expect(errorSpy).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      errorSpy.mockRestore();
+    }
+  });
+});
 
 describe("POST /api/identify — validation + rate limits (regression)", () => {
   it("invalid organ values (lateral/root) → 400 invalid_request BEFORE any provider call", async () => {

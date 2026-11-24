@@ -84,6 +84,7 @@ export type IdentifyErrorPayload = {
       | "daily_limit_reached"
       | "upstream_error"
       | "quota_exhausted"
+      | "provider_unavailable"
       | "concurrency_limited"
       | "internal_error"
       /** Stage B (2026-11-13): unexpected upstream 4xx ≠ no-match

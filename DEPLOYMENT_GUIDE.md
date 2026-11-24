@@ -276,8 +276,8 @@ Canonical names (do not rename — every doc uses these; see also `ENVIRONMENT_S
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Project Settings → API → Project URL | ✅ YES (anon traffic needs it to reach auth/storage) | dev project URL | dev project URL | prod project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase dashboard → Project Settings → API → **Publishable key** (new naming, ADR-9 2026-11-10; the doc's earlier "anon key" row refers to the same credential) | ✅ YES (by design — RLS is the real security boundary, `SECURITY.md`) | dev project publishable key | dev project publishable key | prod publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API → `service_role` | ❌ NO — **server only, never `NEXT_PUBLIC_`-prefixed** | dev project service-role key (careful with it locally) | dev project service-role key (or omit if preview flow never needs it) | prod project service-role key |
-| `PLANTNET_API_KEY` | your `my.plantnet.org` account (one account per person — `docs/VERIFIED_FACTS.md` §Pl@ntNet) — free plan, 500/day | ❌ NO — **server only** | same key, used in mock/real toggles | same key (+ `PLANTNET_MODE=mock`) | **the free key used by prod** |
-| `PLANTNET_MODE` | Set it yourself: `mock` \| `real` | ❌ NO (server-only behavior flag) | `mock` (default during dev) | `mock` | `real` |
+| `PLANTNET_API_KEY` | your `my.plantnet.org` account (one account per person — `docs/VERIFIED_FACTS.md` §Pl@ntNet) — free plan, 500/day | ❌ NO — **server only** | optional locally (empty = sample data) | omit to keep previews on sample data | **the free key used by prod (enables live identification)** |
+| `PLANTNET_MODE` | Optional legacy flag; live mode is enabled by `PLANTNET_API_KEY` alone | ❌ NO (server-only behavior flag) | unset | unset | unset |
 | *(Phase-5+)* `RESEND_API_KEY` etc. | any transactional email/paid service | ❌ NO | — | — | as needed |
 
 ### 6.2 Exposure rules (critical)

@@ -2,24 +2,19 @@ import { getPlantnetApiKey, getPlantnetMode } from "@/lib/env";
 import type { IdentifyProviderRequest, IdentifyProviderResult } from "@/lib/plantnet/types";
 
 /**
- * Provider adapter seam (Phase 2 mock-first; Stage B 2026-11-13 adds the
- * live Pl@ntNet provider behind the SAME `identify()` signature).
+ * Provider adapter seam: live Pl@ntNet behind the SAME `identify()`
+ * signature as the deterministic mock provider.
  *
- * Wiring rules (owner requirement — Stage B):
- * - `PLANTNET_MODE` missing or not EXACTLY "live" → MockProvider, always.
- *   `PLANTNET_MODE=mock` returns the MockProvider immediately and the live
- *   provider is never constructed or called (mock-first, zero external calls).
- * - `PLANTNET_MODE=live` with a missing/blank server-only API key fails safe
- *   to mock with a safe diagnostic (key value never logged) — enforced in
- *   BOTH env.getPlantnetMode() (loud fail-safe) and here (belt-and-braces).
+ * Wiring rules:
+ * - A non-blank server-only `PLANTNET_API_KEY` selects the live provider.
+ *   `PLANTNET_MODE` is not needed to enable live identification; it is only
+ *   used to log a diagnostic when it says "live" but the key is missing.
+ * - No key → MockProvider (no external calls). The route turns that into a
+ *   clean "not available right now" response in production, so sample
+ *   matches are never presented as live results to visitors.
  * - The live provider module (`live-provider.ts`) is lazy-imported inside
- *   identify() only, so mock mode never even loads it (no bundle, no side
+ *   identify() only, so the mock path never loads it (no bundle, no side
  *   effects, no fetch).
- * - No live identification is ACTIVATED by Stage B: switching the deployed
- *   `PLANTNET_MODE` to `live` remains a separate owner decision (stages
- *   G/H of TASKS.md). Note the live provider's 200 path currently surfaces
- *   the typed Stage C boundary error until the upstream→candidate normalizer
- *   is implemented.
  */
 
 export interface IdentifyProvider {
@@ -53,9 +48,9 @@ class LiveProviderHandle implements IdentifyProvider {
 }
 
 /**
- * Resolves the provider. Default (and approved current behavior): mock.
- * `PLANTNET_MODE=live` requires a valid server-only API key (checked by
- * getPlantnetMode, re-checked here); otherwise the app fails safe to mock.
+ * Resolves the provider: live when a server-only `PLANTNET_API_KEY` is
+ * configured, mock otherwise. The key is re-read here so a blank/whitespace
+ * value can never reach the live provider.
  */
 export function getProvider(): { mode: "mock" | "live"; provider: IdentifyProvider } {
   const mode = getPlantnetMode();

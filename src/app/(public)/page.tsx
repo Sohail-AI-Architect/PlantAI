@@ -10,9 +10,9 @@ import { HERO_IMAGE, PLANT_LIBRARY_IMAGES } from "@/lib/plant-images";
  * Homepage — completed MVP slice (FR-HOME-001/002/003).
  *
  * A visitor can now start the core journey from here: the primary CTA is
- * /identify (mock/demo mode — the MockDemoBanner on that page states this
- * honestly). Copy never overclaims: identification results are AI-assisted,
- * not a disease diagnosis, and the library grows with human-written guides.
+ * /identify. Copy never overclaims: identification results are AI-assisted
+ * (live Pl@ntNet when the server key is configured), not a disease diagnosis,
+ * and the library grows with human-written guides.
  *
  * SEO (Stage 2C, live-verified gap): every other public page declares its
  * own canonical URL — the homepage was the one page without one (its title/

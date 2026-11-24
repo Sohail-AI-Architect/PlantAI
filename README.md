@@ -155,10 +155,12 @@ view:
 7. **Output** — ranked species suggestions with scores, plus attribution and
    service metadata.
 
-Enabling live mode requires **three** things simultaneously:
-`PLANTNET_MODE=live`, a server-only `PLANTNET_API_KEY`, and an explicit
-operational decision — the app refuses to start live mode with a missing or
-blank key. See [`AI_INTEGRATION_PLAN.md`](AI_INTEGRATION_PLAN.md) and
+Enabling live identification requires a single server-only variable:
+`PLANTNET_API_KEY` (from `my.plantnet.org → settings → API key`). When it is
+present the app uses the live Pl@ntNet provider; when it is missing or blank
+the API returns a clean "not available right now" response in production, and
+local development/test falls back to deterministic sample data. See
+[`AI_INTEGRATION_PLAN.md`](AI_INTEGRATION_PLAN.md) and
 [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md).
 
 ---
@@ -286,8 +288,8 @@ commit `.env.local`** — it is already excluded via `.gitignore`.
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (publishable) |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable (anon) key for browser clients |
 | `SUPABASE_SECRET_KEY` | Server-only Supabase secret key |
-| `PLANTNET_API_KEY` | Server-only Pl@ntNet API key (live mode only) |
-| `PLANTNET_MODE` | `mock` (default) or `live` — protected mode flag |
+| `PLANTNET_API_KEY` | Server-only Pl@ntNet API key — set it to enable live identification |
+| `PLANTNET_MODE` | Optional; only used to warn when set to `live` without a key |
 | `PLANTAI_PERSISTENCE_ENABLED` | `OFF` (default) or `true` — persistence gate |
 | `IP_HASH_SALT` | Salt for privacy-preserving IP hashing in rate limiting |
 
@@ -311,8 +313,8 @@ auto-detects Next.js and installs its official adapter.
    scope: all scopes) **before** the build that goes public — the Supabase
    URL is consumed at build time for the Content-Security-Policy. Use the
    [Environment Variables](#environment-variables) table; for production set
-   `NEXT_PUBLIC_SITE_URL` to the final `*.netlify.app` URL and `PLANTNET_MODE`
-   explicitly to `mock` or `live`.
+   `NEXT_PUBLIC_SITE_URL` to the final `*.netlify.app` URL and add
+   `PLANTNET_API_KEY` so `/identify` uses live Pl@ntNet results.
 4. **Deploy**, then trigger a fresh deploy after setting the final site URL.
 5. **Verify** post-deploy: HTTPS, all routes, `/robots.txt`, `/sitemap.xml`,
    security headers, and the identification flow.
@@ -416,10 +418,11 @@ Additional verified facts:
 
 - The automated test suite currently counts **197 passing tests**
   (`npm test`).
-- The application runs with `PLANTNET_MODE=mock` and
-  `PLANTAI_PERSISTENCE_ENABLED=OFF` unless the owner explicitly changes
-  these protected mode flags. **Demo mode is stated honestly in the UI** —
-  live identification is never faked.
+- Live Pl@ntNet identification is used whenever `PLANTNET_API_KEY` is set.
+  Without it, production returns a clear "identification not available"
+  response instead of sample results. `PLANTAI_PERSISTENCE_ENABLED` stays
+  `OFF` unless explicitly enabled. **Sample data is never presented as a live
+  identification.**
 - Database migrations 000–004 were applied to the development project;
   **migration 005 is pending** and its application status has not been
   re-verified against the live database in this document.

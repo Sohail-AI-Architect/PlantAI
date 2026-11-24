@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { IdentifySuccessPayload, SpeciesCandidate, CareSummary } from "@/lib/plantnet/types";
 import { MockDemoBanner } from "@/components/identify/mock-demo-banner";
 import { PlanteNetAttribution } from "@/components/identify/attribution";
+import { CareBasicsLink } from "@/components/home/care-basics-link";
 import { savePlant } from "@/actions/saved-plants";
 
 /**
@@ -214,7 +215,11 @@ export function IdentifyResults({
           structured identity fields above, or browse{" "}
           <Link href="/library" className="underline hover:text-foreground">
             the library
-          </Link>
+          </Link>{" "}
+          and the{" "}
+          <CareBasicsLink className="underline hover:text-foreground">
+            indoor plant care basics
+          </CareBasicsLink>
           .
         </p>
       )}

@@ -532,6 +532,26 @@ describe("provider seam wiring (mock-first, live inactive)", () => {
     const [url] = fetchMock.mock.calls[0] as unknown as [URL];
     expect(url.pathname).toBe("/v2/identify/all");
   });
+
+  it("PLANTNET_API_KEY alone (no PLANTNET_MODE) is enough to wire the live provider", async () => {
+    process.env.PLANTNET_API_KEY = DUMMY_KEY; // dummy only — never a real key
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(200, {
+        results: [
+          {
+            score: 0.8,
+            species: { scientificNameWithoutAuthor: "Ficus lyrata" },
+          },
+        ],
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { mode, provider } = getProvider();
+    expect(mode).toBe("live");
+    const out = await provider.identify(req("auto"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(out.topResult.species[0]?.scientificName).toBe("Ficus lyrata");
+  });
 });
 
 /* ------------------------------------------------------------------ */

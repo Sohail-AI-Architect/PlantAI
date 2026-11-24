@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash, randomUUID } from "node:crypto";
-import { getIpHashSalt, requireServerOnly } from "@/lib/env";
+import { getIpHashSalt, getPlantnetApiKey, requireServerOnly } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { identifyLimiter } from "@/lib/rate-limit";
 import { getIdentifyLimits } from "@/lib/settings";
@@ -30,16 +30,17 @@ import type {
 
 /**
  * POST /api/identify — the MVP's only Route Handler
- * (API_DOCUMENTATION.md §2; Phase 2 mock-first implementation).
+ * (API_DOCUMENTATION.md §2; live Pl@ntNet when `PLANTNET_API_KEY` is set).
  *
- * Pipeline (§2.4), Phase 2 reality:
+ * Pipeline (§2.4):
  *   [1] body-size guard 413  →  [2] multipart parse 400
  *   →  [3] field validation (zod) 400
  *   →  [4] per-image magic-byte + size validation 400/413
  *   →  [5] identity via verified claims (never client-declared headers)
  *   →  [6] rate limit (in-memory, honest per-instance semantics) 429
  *   →  [7] SHA-256 hash + dedup lookup 200 cached:true
- *   →  [8] provider identify (MOCK only in this phase — zero external calls)
+ *   →  [8] provider identify (live Pl@ntNet, or a clean 503 when the server
+ *           key is not configured in production)
  *   →  [9] normalize + confidence bands
  *   →  [10] careSummary from plant_library (published rows, session client)
  *   →  [11] persistence — WRITE CONTROL: automatic DB writes are disabled
@@ -275,6 +276,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     buffers.push(verdict.bytes);
   }
 
+  // Live identification is configuration-driven. In production, a missing
+  // server key returns a clean service-unavailable response instead of fake
+  // sample matches — and it does not consume the visitor's daily quota.
+  if (process.env.NODE_ENV === "production" && !getPlantnetApiKey()) {
+    const peek = identifyLimiter.peek(limiterKey, limit);
+    console.error(
+      "[identify] live identification is not configured: set the server-only PLANTNET_API_KEY to enable Pl@ntNet."
+    );
+    return errorResponse(
+      503,
+      "provider_unavailable",
+      "Plant identification isn't available right now — please try again later.",
+      rateHeaders(limit, peek.remaining, peek.resetAt)
+    );
+  }
+
   // [5]/[6] rate limit — consumes an attempt only for requests that passed
   // validation (failed requests don't burn the user's daily budget).
   const decision = identifyLimiter.consume(limiterKey, limit);
@@ -315,7 +332,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // [8] provider (mock-only in this phase — zero external calls).
+    // [8] provider — live Pl@ntNet when PLANTNET_API_KEY is configured
+    // (production without a key already returned 503 above); development
+    // and tests use the deterministic mock provider.
     const { mode, provider } = getProvider();
     const providerResult = await provider.identify({
       images: buffers,
@@ -363,7 +382,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...(mode === "mock"
         ? {
             mockNotice:
-              "Demo result — PlantAI testing mode. This is not a real AI identification.",
+              "Sample data — this result did not come from live Pl@ntNet identification.",
           }
         : {}),
     };

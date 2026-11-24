@@ -382,7 +382,7 @@ describe("in-memory dedup cache (read-only behavior preserved)", () => {
       remainingQuota: 4,
       topResult: { species: SPECIES },
       careSummary: null,
-      mockNotice: "Demo result — PlantAI testing mode. This is not a real AI identification.",
+      mockNotice: "Sample data — this result did not come from live Pl@ntNet identification.",
     };
     putCache(hash, "auto", payload);
     const hit = lookupCache(hash, "auto");
