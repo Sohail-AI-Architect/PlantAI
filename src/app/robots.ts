@@ -6,6 +6,10 @@ import type { MetadataRoute } from "next";
  * `robots: { index: false }` metadata — robots.txt is a courtesy for
  * well-behaved crawlers, the metadata is the actual noindex control.
  */
+
+/** Canonical sitemap base, consistent with layout.tsx and sitemap.ts. */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
@@ -22,5 +26,6 @@ export default function robots(): MetadataRoute.Robots {
         "/auth/",
       ],
     },
+    sitemap: new URL("/sitemap.xml", siteUrl).toString(),
   };
 }

@@ -168,15 +168,15 @@ Realistic, high-confidence use of official Schema.org types (no invented rich-re
 
 | Page type | Schema | Notes |
 |---|---|---|
-| Home | `WebSite` (+ `SearchAction` pointing to `/library?q={search_term_string}`) | Standard, safe. |
-| All pages | `Organization` + `logo` on home; `BreadcrumbList` on every non-home public page. | Always present. |
-| Plant detail | `Article` markup mapping the care-profile content + `BreadcrumbList`. *Considered and rejected for MVP: `Taxon` schema (the `scholarlyArticle`/`Taxon` route is niche and little tooling supports it — UNVERIFIED benefit); revisit post-launch if evidence shows it matters.* | Care facts as structured text is the practical value. |
-| Blog posts | `BlogPosting` (with `headline`, `image`, `datePublished`, `dateModified`, `author` → `Person`/`Organization`). | |
-| Guides/FAQ-style problem pages | `Article` + `FAQPage` (only when real Q&A content exists — FAQ rich results have scope limits; never fake Q&A). | Aligned with `CONTENT_STRATEGY.md`. |
-| Identification tool | No special schema — honest `WebSite`/`WebApplication`-level minimum only; no invented "AI service" schema claims. | |
-| Attribution contact | `Organization` with `contactPoint` (matches `/contact`). | |
+| Home | `WebSite` + `SoftwareApplication` (implemented in `src/app/(public)/page.tsx`). | The first describes the site; the second describes the free web app. Sitelinks-searchbox markup is deliberately omitted: library search is a `?q=` view with no unique indexed result pages (§6), so such markup would promise unsupported behavior. |
+| All pages | No blanket `Organization` or `BreadcrumbList` injection; use `BreadcrumbList` only where a real visible breadcrumb exists. | Home has no breadcrumb — do not invent one. |
+| Plant detail | `BreadcrumbList` mirroring the visible breadcrumb (implemented in `src/app/(public)/plant/[slug]/page.tsx`). | Care facts stay human-readable content; no `Article`/`Taxon` rich-result claim. |
+| Blog posts | `BreadcrumbList` on published post pages (implemented in `src/app/(public)/blog/[slug]/page.tsx`). Add `BlogPosting` only when a real published post supplies `headline`, `image`, `datePublished`, `dateModified` and `author`. | `/blog` currently has no published posts, so no `BlogPosting` is emitted. |
+| Guides/FAQ-style problem pages | No schema until such a page is actually published; then consider `Article` only from real content. `FAQPage` only when real Q&A exists and rich-result scope is confirmed. | Aligned with `CONTENT_STRATEGY.md`; never fake Q&A. |
+| Identification tool | Covered by the home `SoftwareApplication` minimum; no invented "AI service" schema claims. | |
+| Attribution contact | No standalone schema; keep contact details in visible page content and metadata. `Organization`/`contactPoint` can be revisited only if implemented from real data. | |
 
-Implementation: a single `JsonLd` component injecting `<script type="application/ld+json">` per route; schema data sourced from the same Supabase content fields that render the page (single source of truth — `DATABASE_SCHEMA.md`).
+Implementation: `src/components/seo/json-ld.tsx` injects one `<script type="application/ld+json">` per call. Feed every schema value from the same source that renders the visible page (`DATABASE_SCHEMA.md` / page props); do not add markup for unpublished or invented content.
 
 ---
 
